@@ -110,78 +110,77 @@ export function Service5Haksaengbu() {
   }
 
   return (
-    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
 
-      {/* Header row — compact */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ padding: '2px 8px', fontSize: 13, borderRadius: 4, background: T.bgAlt, color: T.textMuted, fontWeight: 600, fontFamily: FONT }}>학생부 리포트</span>
-            <span style={{ padding: '2px 8px', fontSize: 13, borderRadius: 4, background: T.successSoft, color: T.success, fontWeight: 600, fontFamily: FONT }}>분석 완료</span>
-            <span style={{ fontSize: 13, color: T.textSubtle, fontFamily: FONT }}>2026.04.17 · AI 신뢰도 94%</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ padding: '3px 10px', fontSize: 14, borderRadius: 5, background: T.bgAlt, color: T.textMuted, fontWeight: 600, fontFamily: FONT }}>학생부 리포트</span>
+            <span style={{ padding: '3px 10px', fontSize: 14, borderRadius: 5, background: T.successSoft, color: T.success, fontWeight: 600, fontFamily: FONT }}>분석 완료</span>
+            <span style={{ fontSize: 14, color: T.textSubtle, fontFamily: FONT }}>2026.04.17 · AI 신뢰도 94%</span>
           </div>
-          <h1 style={{ fontSize: 'clamp(20px, 2.4vw, 30px)', fontWeight: 800, letterSpacing: '-0.035em', color: T.text, margin: 0, lineHeight: 1.2, fontFamily: FONT }}>
+          <h1 style={{ fontSize: 'clamp(22px, 2.6vw, 34px)', fontWeight: 800, letterSpacing: '-0.035em', color: T.text, margin: 0, lineHeight: 1.2, fontFamily: FONT }}>
             김지우 학생의 학생부 종합 분석
           </h1>
         </div>
-        <button onClick={() => { setAnalyzed(false); setFile(null); }} style={{ padding: '7px 14px', borderRadius: 8, background: 'transparent', color: T.text, border: `1px solid ${T.borderStrong}`, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, flexShrink: 0 }}>다시 업로드</button>
+        <button onClick={() => { setAnalyzed(false); setFile(null); }} style={{ padding: '9px 18px', borderRadius: 8, background: 'transparent', color: T.text, border: `1px solid ${T.borderStrong}`, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, flexShrink: 0 }}>다시 업로드</button>
       </div>
 
-      {/* Main grid: 2 columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 12 }}>
+      {/* Main grid: 3 columns */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
 
-        {/* Left: word cloud + suggestions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* Word cloud */}
-          <div style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: '16px 16px 12px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>핵심 키워드</div>
-              <div style={{ fontSize: 12, color: T.textSubtle, fontFamily: FONT }}>3년 생기부 빈도순</div>
-            </div>
-            <WordCloud />
+        {/* Col 1: Word cloud */}
+        <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>핵심 키워드</div>
+            <div style={{ fontSize: 14, color: T.textSubtle, fontFamily: FONT }}>3년 빈도순</div>
           </div>
-
-          {/* Suggestions grid */}
-          <div style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: 16, flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', marginBottom: 10, fontFamily: FONT }}>보완 제안</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {SUGGESTIONS.map((s, i) => {
-                const cc = T.comp[s.c];
-                return (
-                  <div key={i} style={{ padding: '10px 12px', borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}`, borderLeft: `3px solid ${cc.color}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 3, fontFamily: FONT }}>{s.title}</div>
-                    <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.5, fontFamily: FONT }}>{s.desc}</div>
-                  </div>
-                );
-              })}
-            </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <WordCloud />
           </div>
         </div>
 
-        {/* Right: 3 report sections */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Col 2: 3 report sections */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {REPORT_SECTIONS.map((s) => {
             const c = T.comp[s.compKey];
             return (
-              <div key={s.num} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: '16px 20px', position: 'relative', overflow: 'hidden', flex: 1 }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: c.color }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: 6, background: c.soft, color: c.color, fontSize: 12, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.num}</span>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>{s.title}</div>
+              <div key={s.num} style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '20px 24px', position: 'relative', overflow: 'hidden', flex: 1 }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: c.color }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <span style={{ width: 28, height: 28, borderRadius: 8, background: c.soft, color: c.color, fontSize: 15, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.num}</span>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>{s.title}</div>
                 </div>
-                <div style={{ padding: '10px 14px', borderRadius: 8, background: c.soft, borderLeft: `3px solid ${c.color}`, marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: c.color, letterSpacing: '0.05em', marginBottom: 4, fontFamily: FONT }}>강점</div>
-                  <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, fontFamily: FONT }}>{s.good}</div>
+                <div style={{ padding: '12px 16px', borderRadius: 10, background: c.soft, borderLeft: `4px solid ${c.color}`, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: c.color, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>강점</div>
+                  <div style={{ fontSize: 15, color: T.text, lineHeight: 1.7, fontFamily: FONT }}>{s.good}</div>
                 </div>
-                <div style={{ padding: '10px 14px', borderRadius: 8, background: T.dangerSoft, borderLeft: `3px solid ${T.danger}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.danger, letterSpacing: '0.05em', marginBottom: 4, fontFamily: FONT }}>보완</div>
-                  <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, fontFamily: FONT }}>{s.fix}</div>
+                <div style={{ padding: '12px 16px', borderRadius: 10, background: T.dangerSoft, borderLeft: `4px solid ${T.danger}` }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.danger, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>보완</div>
+                  <div style={{ fontSize: 15, color: T.text, lineHeight: 1.7, fontFamily: FONT }}>{s.fix}</div>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* Col 3: Suggestions */}
+        <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '22px 20px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', marginBottom: 16, fontFamily: FONT }}>보완 제안</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+            {SUGGESTIONS.map((s, i) => {
+              const cc = T.comp[s.c];
+              return (
+                <div key={i} style={{ padding: '14px 16px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}`, borderLeft: `4px solid ${cc.color}`, flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 6, fontFamily: FONT }}>{s.title}</div>
+                  <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{s.desc}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
     </div>
   );
