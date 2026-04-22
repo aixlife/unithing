@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { useStudent } from '@/contexts/StudentContext';
@@ -24,6 +24,19 @@ function StudentSelector() {
   const [open, setOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirmDeleteId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -37,7 +50,7 @@ function StudentSelector() {
 
   return (
     <>
-      <div style={{ position: 'relative' }}>
+      <div ref={wrapRef} style={{ position: 'relative' }}>
         <button onClick={() => { setOpen(o => !o); setConfirmDeleteId(null); }} style={{
           display: 'flex', alignItems: 'center', gap: 7,
           background: '#F4F6F8', border: '1px solid #E5E8EB', borderRadius: 8,

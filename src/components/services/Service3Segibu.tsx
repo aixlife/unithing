@@ -330,11 +330,13 @@ export function Service3Segibu() {
     setProgress(0);
     const interval = setInterval(() => {
       setProgress(p => {
-        if (p >= 92) return p;
-        // 빠르게 시작하다가 점점 느려지는 가속도 커브
-        const remaining = 92 - p;
-        const step = Math.max(0.2, remaining * 0.025) + Math.random() * 0.4;
-        return Math.min(92, p + step);
+        if (p >= 99) return p;
+        const remaining = 99 - p;
+        // 0~92%: 빠르게, 92~99%: 매우 느리게 (AI 대기 중)
+        const step = p < 92
+          ? Math.max(0.2, remaining * 0.025) + Math.random() * 0.4
+          : 0.04 + Math.random() * 0.03;
+        return Math.min(99, p + step);
       });
     }, 350);
     return () => clearInterval(interval);
