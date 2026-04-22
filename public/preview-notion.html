@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UNITHING — 생기부 분석 Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-page: #ffffff;
+      --bg-surface: #f6f5f4;
+      --bg-hover: #f1f0ef;
+      --text-primary: rgba(0,0,0,0.95);
+      --text-secondary: #615d59;
+      --text-muted: #a39e98;
+      --accent: #1B64DA;
+      --accent-light: #e8f0fd;
+      --border: rgba(0,0,0,0.1);
+      --border-light: rgba(0,0,0,0.06);
+      --shadow-card: rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2.025px 7.847px, rgba(0,0,0,0.02) 0px 0.8px 2.925px;
+      --shadow-subtle: rgba(0,0,0,0.03) 0px 2px 8px, rgba(0,0,0,0.02) 0px 1px 3px;
+      --radius-card: 8px;
+      --radius-sm: 4px;
+      --sidebar-width: 220px;
+      --ad-width: 200px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      background: var(--bg-page);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* ─── HEADER ─── */
+    .header {
+      height: 52px;
+      background: var(--bg-page);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-logo {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header-logo-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .header-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .header-student-selector {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-page);
+      cursor: pointer;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+      transition: background 0.1s;
+    }
+
+    .header-student-selector:hover {
+      background: var(--bg-hover);
+    }
+
+    .student-avatar-sm {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #c7d9f8, #a5bff5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .selector-caret {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .header-spacer {
+      flex: 1;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-btn {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      border: none;
+    }
+
+    .header-btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .header-btn-primary:hover {
+      opacity: 0.88;
+    }
+
+    .header-btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .header-btn-ghost:hover {
+      background: var(--bg-hover);
+    }
+
+    .profile-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fde8c8, #fac88a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #8b5a2b;
+      cursor: pointer;
+      border: 1.5px solid rgba(0,0,0,0.08);
+    }
+
+    /* ─── APP SHELL ─── */
+    .app-shell {
+      display: flex;
+      height: calc(100vh - 52px);
+    }
+
+    /* ─── BOOK SIDEBAR ─── */
+    .book-sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      padding: 16px 0;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sidebar-section {
+      margin-bottom: 4px;
+    }
+
+    .sidebar-section-header {
+      padding: 4px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+      margin-top: 12px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.1s;
+      user-select: none;
+    }
+
+    .sidebar-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .sidebar-item.active {
+      background: rgba(27, 100, 218, 0.07);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .sidebar-item-icon {
+      font-size: 14px;
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .sidebar-item-badge {
+      margin-left: auto;
+      background: var(--accent-light);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    .sidebar-item-new {
+      margin-left: auto;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border-light);
+      margin: 10px 16px;
+    }
+
+    /* ─── MAIN AREA ─── */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-page);
+    }
+
+    /* ─── TAB BAR ─── */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      background: var(--bg-page);
+      flex-shrink: 0;
+    }
+
+    .tab-item {
+      position: relative;
+      padding: 14px 16px 12px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.1s;
+      user-select: none;
+    }
+
+    .tab-item:hover {
+      color: var(--text-primary);
+    }
+
+    .tab-item.active {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .tab-item.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 16px;
+      right: 16px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 2px 2px 0 0;
+    }
+
+    .tab-item-star {
+      font-size: 10px;
+      vertical-align: super;
+      margin-left: 2px;
+    }
+
+    /* ─── MAIN CONTENT ─── */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px 48px;
+    }
+
+    /* ─── STUDENT INFO CARD ─── */
+    .student-info-card {
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .student-avatar-lg {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #c7d9f8, #a5bff5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+      border: 2px solid rgba(27, 100, 218, 0.15);
+    }
+
+    .student-info-main {
+      flex: 1;
+    }
+
+    .student-name-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .student-name {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .student-grade-tag {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .student-meta {
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 12px;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .meta-sep {
+      color: var(--border);
+    }
+
+    .student-info-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .analysis-date {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .analysis-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      font-size: 12px;
+      font-weight: 600;
+      color: #16a34a;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #16a34a;
+    }
+
+    /* ─── SECTION HEADER ─── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .section-link {
+      font-size: 12.5px;
+      color: var(--accent);
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    /* ─── SCORE CARDS ─── */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .score-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      padding: 18px 20px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .score-card-blue {
+      background: #f0f5fe;
+      border-color: rgba(27, 100, 218, 0.14);
+    }
+
+    .score-card-amber {
+      background: #fefbf0;
+      border-color: rgba(180, 130, 20, 0.14);
+    }
+
+    .score-card-green {
+      background: #f0fdf5;
+      border-color: rgba(22, 163, 74, 0.14);
+    }
+
+    .score-card-deco {
+      position: absolute;
+      top: -12px;
+      right: -10px;
+      font-size: 52px;
+      opacity: 0.065;
+    }
+
+    .score-card-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .score-card-blue .score-card-label { color: #2553a8; }
+    .score-card-amber .score-card-label { color: #926800; }
+    .score-card-green .score-card-label { color: #15803d; }
+
+    .score-value-row {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+
+    .score-value {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    .score-card-blue .score-value { color: var(--accent); }
+    .score-card-amber .score-value { color: #b45309; }
+    .score-card-green .score-value { color: #16a34a; }
+
+    .score-unit {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .score-trend {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 4px;
+    }
+
+    .trend-up {
+      background: #f0fdf4;
+      color: #16a34a;
+    }
+
+    .trend-neutral {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .score-bar-track {
+      height: 5px;
+      background: rgba(0,0,0,0.06);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      transition: width 0.6s ease;
+    }
+
+    .score-card-blue .score-bar-fill { background: var(--accent); }
+    .score-card-amber .score-bar-fill { background: #d97706; }
+    .score-card-green .score-bar-fill { background: #16a34a; }
+
+    .score-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    /* ─── GRADE CHART CARD ─── */
+    .grade-chart-card {
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    .grade-chart-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .grade-chart-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .grade-chart-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .grade-summary-badges {
+      display: flex;
+      gap: 8px;
+    }
+
+    .grade-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+    }
+
+    .grade-badge-val {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .grade-badge-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .grade-chart-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .grade-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .grade-row-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      width: 28px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .grade-row-bar-track {
+      flex: 1;
+      height: 20px;
+      background: var(--bg-surface);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .grade-row-bar-fill {
+      height: 100%;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      padding-right: 10px;
+      justify-content: flex-end;
+    }
+
+    .grade-row-bar-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .grade-row-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      width: 80px;
+      flex-shrink: 0;
+    }
+
+    /* ─── ANALYSIS REPORT CARD ─── */
+    .report-card {
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      padding: 22px 24px;
+      margin-bottom: 20px;
+    }
+
+    .report-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .report-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .report-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .report-card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .report-ai-tag {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #f0f5fe, #e8f0fd);
+      border: 1px solid rgba(27,100,218,0.14);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .report-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .report-block {
+      padding: 14px 16px;
+      border-radius: 6px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+    }
+
+    .report-block-full {
+      grid-column: 1 / -1;
+    }
+
+    .report-block-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .report-block-text {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.65;
+    }
+
+    .report-block-text strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .keyword-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .keyword-tag {
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .keyword-tag.highlight {
+      background: var(--accent-light);
+      border-color: rgba(27,100,218,0.18);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ─── ACTION CARD ─── */
+    .action-card {
+      background: linear-gradient(135deg, #f0f5fe 0%, #e8eeff 100%);
+      border: 1px solid rgba(27,100,218,0.14);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-subtle);
+      padding: 18px 22px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .action-card-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .action-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 3px;
+    }
+
+    .action-card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .action-card-btn {
+      margin-left: auto;
+      padding: 8px 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+
+    .action-card-btn:hover {
+      opacity: 0.88;
+    }
+
+    /* ─── AD SIDEBAR ─── */
+    .ad-sidebar {
+      width: var(--ad-width);
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border);
+      padding: 16px 12px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .ad-sidebar-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      padding: 0 4px;
+    }
+
+    .ad-card {
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-subtle);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .ad-card-img {
+      width: 100%;
+      height: 90px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .ad-card-img-2 {
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+    }
+
+    .ad-card-img-3 {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+    }
+
+    .ad-card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+
+    .ad-card-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .ad-card-cta {
+      width: 100%;
+      padding: 6px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .ad-card-cta:hover {
+      opacity: 0.88;
+    }
+
+    .ad-promo-strip {
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      border: 1px solid #fcd34d;
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #78350f;
+      line-height: 1.4;
+    }
+
+    /* ─── FOOTER ─── */
+    .preview-footer {
+      text-align: center;
+      padding: 18px 0 12px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-light);
+      margin-top: 8px;
+    }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0,0,0,0.1);
+      border-radius: 100px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0,0,0,0.18);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── HEADER ─── -->
+  <header class="header">
+    <div class="header-logo">
+      <div class="header-logo-dot"></div>
+      UNITHING
+    </div>
+    <div class="header-divider"></div>
+    <div class="header-student-selector">
+      <div class="student-avatar-sm">김</div>
+      김민준
+      <span class="selector-caret">▾</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-actions">
+      <button class="header-btn header-btn-ghost">학생 추가</button>
+      <button class="header-btn header-btn-primary">+ AI 분석 실행</button>
+      <div class="profile-avatar">박</div>
+    </div>
+  </header>
+
+  <!-- ─── APP SHELL ─── -->
+  <div class="app-shell">
+
+    <!-- ─── BOOK SIDEBAR ─── -->
+    <nav class="book-sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">나의 서재</div>
+        <div class="sidebar-item active">
+          <span class="sidebar-item-icon">📚</span>
+          캠퍼스 멘토
+          <span class="sidebar-item-badge">NEW</span>
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">🎓</span>
+          입시 필독서
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">📝</span>
+          생기부 가이드
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">🔬</span>
+          세특 사례집
+          <span class="sidebar-item-new">HOT</span>
+        </div>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">내 반 학생</div>
+        <div class="sidebar-item active">
+          <span class="sidebar-item-icon">👤</span>
+          김민준
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">👤</span>
+          이서연
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">👤</span>
+          박지호
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">👤</span>
+          최유나
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">👤</span>
+          정준혁
+        </div>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">도구</div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">⚙️</span>
+          환경 설정
+        </div>
+        <div class="sidebar-item">
+          <span class="sidebar-item-icon">📊</span>
+          학급 통계
+        </div>
+      </div>
+    </nav>
+
+    <!-- ─── MAIN AREA ─── -->
+    <div class="main-area">
+
+      <!-- TAB BAR -->
+      <div class="tab-bar">
+        <div class="tab-item" onclick="setTab(this)">대학 찾기</div>
+        <div class="tab-item" onclick="setTab(this)">과목 가이드</div>
+        <div class="tab-item active" onclick="setTab(this)">생기부 분석<span class="tab-item-star">★</span></div>
+        <div class="tab-item" onclick="setTab(this)">세특 도우미</div>
+        <div class="tab-item" onclick="setTab(this)">학생부</div>
+      </div>
+
+      <!-- MAIN CONTENT -->
+      <div class="main-content">
+
+        <!-- STUDENT INFO CARD -->
+        <div class="student-info-card">
+          <div class="student-avatar-lg">민준</div>
+          <div class="student-info-main">
+            <div class="student-name-row">
+              <span class="student-name">김민준</span>
+              <span class="student-grade-tag">고2</span>
+            </div>
+            <div class="student-meta">
+              <div class="meta-item">🏫 서울고등학교</div>
+              <span class="meta-sep">·</span>
+              <div class="meta-item">🎯 희망 전공: 경영학과</div>
+              <span class="meta-sep">·</span>
+              <div class="meta-item">📅 2027학년도 입시</div>
+            </div>
+          </div>
+          <div class="student-info-right">
+            <div class="analysis-date">분석일 2026. 04. 23</div>
+            <div class="analysis-badge">
+              <div class="badge-dot"></div>
+              분석 완료
+            </div>
+          </div>
+        </div>
+
+        <!-- SCORE CARDS -->
+        <div class="section-header">
+          <span class="section-title">3대 역량 평가</span>
+          <a class="section-link">상세 보기 →</a>
+        </div>
+        <div class="score-grid">
+
+          <!-- 학업역량 -->
+          <div class="score-card score-card-blue">
+            <div class="score-card-deco">📘</div>
+            <div class="score-card-label">학업역량</div>
+            <div class="score-value-row">
+              <span class="score-value">78</span>
+              <span class="score-unit">/ 100</span>
+              <span class="score-trend trend-up">▲ 4</span>
+            </div>
+            <div class="score-bar-track">
+              <div class="score-bar-fill" style="width:78%"></div>
+            </div>
+            <div class="score-desc">교과 성취도 및 학업 심화 역량이 우수한 수준입니다. 수학·과학 영역의 심화 학습 경험이 풍부합니다.</div>
+          </div>
+
+          <!-- 진로역량 -->
+          <div class="score-card score-card-amber">
+            <div class="score-card-deco">🎯</div>
+            <div class="score-card-label">진로역량</div>
+            <div class="score-value-row">
+              <span class="score-value">72</span>
+              <span class="score-unit">/ 100</span>
+              <span class="score-trend trend-neutral">― 0</span>
+            </div>
+            <div class="score-bar-track">
+              <div class="score-bar-fill" style="width:72%"></div>
+            </div>
+            <div class="score-desc">경영·경제 분야에 대한 탐구 활동이 다소 부족합니다. 관련 독서·프로젝트 활동을 보강하면 좋겠습니다.</div>
+          </div>
+
+          <!-- 공동체역량 -->
+          <div class="score-card score-card-green">
+            <div class="score-card-deco">🤝</div>
+            <div class="score-card-label">공동체역량</div>
+            <div class="score-value-row">
+              <span class="score-value">81</span>
+              <span class="score-unit">/ 100</span>
+              <span class="score-trend trend-up">▲ 7</span>
+            </div>
+            <div class="score-bar-track">
+              <div class="score-bar-fill" style="width:81%"></div>
+            </div>
+            <div class="score-desc">학급 임원 활동 및 봉사 이력이 탁월합니다. 협업·리더십 역량이 학생부 전체에서 일관되게 드러납니다.</div>
+          </div>
+
+        </div>
+
+        <!-- GRADE CHART CARD -->
+        <div class="grade-chart-card">
+          <div class="grade-chart-header">
+            <div>
+              <div class="grade-chart-title">교과 등급 현황</div>
+              <div class="grade-chart-subtitle">1~2학년 전 과목 기준 / 석차등급 기반</div>
+            </div>
+            <div class="grade-summary-badges">
+              <div class="grade-badge">
+                <span class="grade-badge-val">2.3</span>
+                <span class="grade-badge-label">전체 평균</span>
+              </div>
+              <div class="grade-badge">
+                <span class="grade-badge-val">2.1</span>
+                <span class="grade-badge-label">국영수 평균</span>
+              </div>
+              <div class="grade-badge">
+                <span class="grade-badge-val">1.8</span>
+                <span class="grade-badge-label">최고 등급</span>
+              </div>
+            </div>
+          </div>
+          <div class="grade-chart-body">
+            <div class="grade-row">
+              <span class="grade-row-label">국어</span>
+              <div class="grade-row-bar-track">
+                <div class="grade-row-bar-fill" style="width:78%; background: linear-gradient(90deg, #1B64DA, #4f87f0);">
+                  <span class="grade-row-bar-text">2등급</span>
+                </div>
+              </div>
+              <span class="grade-row-meta">내신 88.4점</span>
+            </div>
+            <div class="grade-row">
+              <span class="grade-row-label">수학</span>
+              <div class="grade-row-bar-track">
+                <div class="grade-row-bar-fill" style="width:83%; background: linear-gradient(90deg, #1B64DA, #4f87f0);">
+                  <span class="grade-row-bar-text">1등급</span>
+                </div>
+              </div>
+              <span class="grade-row-meta">내신 92.1점</span>
+            </div>
+            <div class="grade-row">
+              <span class="grade-row-label">영어</span>
+              <div class="grade-row-bar-track">
+                <div class="grade-row-bar-fill" style="width:72%; background: linear-gradient(90deg, #d97706, #f59e0b);">
+                  <span class="grade-row-bar-text">2등급</span>
+                </div>
+              </div>
+              <span class="grade-row-meta">내신 83.7점</span>
+            </div>
+            <div class="grade-row">
+              <span class="grade-row-label">사회</span>
+              <div class="grade-row-bar-track">
+                <div class="grade-row-bar-fill" style="width:65%; background: linear-gradient(90deg, #16a34a, #22c55e);">
+                  <span class="grade-row-bar-text">3등급</span>
+                </div>
+              </div>
+              <span class="grade-row-meta">내신 76.2점</span>
+            </div>
+            <div class="grade-row">
+              <span class="grade-row-label">과학</span>
+              <div class="grade-row-bar-track">
+                <div class="grade-row-bar-fill" style="width:70%; background: linear-gradient(90deg, #d97706, #f59e0b);">
+                  <span class="grade-row-bar-text">2등급</span>
+                </div>
+              </div>
+              <span class="grade-row-meta">내신 81.5점</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI ANALYSIS REPORT CARD -->
+        <div class="report-card">
+          <div class="report-card-header">
+            <div class="report-icon">🔍</div>
+            <div>
+              <div class="report-card-title">AI 심층 분석 리포트</div>
+              <div class="report-card-subtitle">학생부 종합 분석 — 생기부 텍스트 기반 AI 평가</div>
+            </div>
+            <div class="report-ai-tag">✦ AI 분석</div>
+          </div>
+          <div class="report-body">
+
+            <div class="report-block">
+              <div class="report-block-title">종합 평가 요약</div>
+              <div class="report-block-text">
+                김민준 학생은 <strong>수학·과학 분야의 심화 학습 역량</strong>이 두드러지며, 학급 부반장으로서의 리더십이 일관되게 드러납니다. 경영학과 진학을 희망하지만 <strong>경제·사회 탐구 활동이 상대적으로 부족</strong>하여 2학기 세특 보강이 권고됩니다.
+              </div>
+            </div>
+
+            <div class="report-block">
+              <div class="report-block-title">강점 키워드</div>
+              <div class="report-block-text">학생부 전반에서 반복적으로 등장하는 핵심 역량 키워드입니다.</div>
+              <div class="keyword-list">
+                <span class="keyword-tag highlight">리더십</span>
+                <span class="keyword-tag highlight">수리 능력</span>
+                <span class="keyword-tag highlight">협업</span>
+                <span class="keyword-tag">봉사 활동</span>
+                <span class="keyword-tag">탐구력</span>
+                <span class="keyword-tag">성실성</span>
+                <span class="keyword-tag">문제 해결</span>
+              </div>
+            </div>
+
+            <div class="report-block">
+              <div class="report-block-title">개선 포인트</div>
+              <div class="report-block-text">
+                <strong>1. 경제·경영 탐구 활동 부재</strong> — 희망 전공 연계 활동이 기록에 거의 없습니다.<br/>
+                <strong>2. 독서 활동 다양성 부족</strong> — 현재 기록된 도서 4권 중 3권이 이공계 편중입니다.<br/>
+                <strong>3. 사회 교과 등급</strong> — 3등급으로 다른 주요 교과 대비 약점이 됩니다.
+              </div>
+            </div>
+
+            <div class="report-block">
+              <div class="report-block-title">추천 전략</div>
+              <div class="report-block-text">
+                2학기 경제 세특에서 <strong>행동경제학 또는 마케팅 데이터 분석 주제</strong>로 탐구 보고서를 작성하면 진로역량 점수를 +8~12점 끌어올릴 수 있습니다. 관련 독서 2권 추가 권장.
+              </div>
+            </div>
+
+            <div class="report-block report-block-full">
+              <div class="report-block-title">평가자 코멘트 (AI)</div>
+              <div class="report-block-text">
+                수도권 상위 15개 대학 경영학과 학종 합격자 데이터 2,400건과 비교 시, 김민준 학생의 학업역량·공동체역량은 <strong>상위 28% 수준</strong>이며, 진로역량 보강 시 상위 15% 진입이 가능한 프로파일로 판단됩니다. 현재 가장 적합한 전형은 <strong>학생부종합 (서류 60% + 면접 40%)</strong> 유형이며, 연세대·고려대 보다는 <strong>성균관대·한양대·이화여대 경영</strong> 라인이 전략적으로 유리합니다.
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ACTION CARD -->
+        <div class="action-card">
+          <div class="action-card-icon">✍️</div>
+          <div>
+            <div class="action-card-title">세특 초안 자동 생성</div>
+            <div class="action-card-desc">분석 결과를 바탕으로 경제 세특 문장을 AI가 자동으로 작성합니다.</div>
+          </div>
+          <button class="action-card-btn">세특 도우미 이동 →</button>
+        </div>
+
+        <div class="preview-footer">UNITHING v2 Preview — Notion Style</div>
+
+      </div>
+    </div>
+
+    <!-- ─── AD SIDEBAR ─── -->
+    <aside class="ad-sidebar">
+      <div class="ad-sidebar-label">추천 콘텐츠</div>
+
+      <div class="ad-promo-strip">
+        🎉 프리미엄 플랜<br/>첫 달 무료 체험 중
+      </div>
+
+      <div class="ad-card">
+        <div class="ad-card-img">📖</div>
+        <div class="ad-card-title">2027 입시 전략 완벽 가이드</div>
+        <div class="ad-card-desc">수도권 15개 대학 학종 합격 패턴 분석 리포트 무료 제공</div>
+        <button class="ad-card-cta">무료 다운로드</button>
+      </div>
+
+      <div class="ad-card">
+        <div class="ad-card-img ad-card-img-2">🎯</div>
+        <div class="ad-card-title">세특 문장 템플릿 500선</div>
+        <div class="ad-card-desc">교과별 우수 세특 문장 사례를 즉시 활용하세요</div>
+        <button class="ad-card-cta">지금 보기</button>
+      </div>
+
+      <div class="ad-card">
+        <div class="ad-card-img ad-card-img-3">🏫</div>
+        <div class="ad-card-title">대학별 학종 평가 기준 DB</div>
+        <div class="ad-card-desc">SKY·연고·성한이 공개한 평가 루브릭 정리본</div>
+        <button class="ad-card-cta">열람하기</button>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <script>
+    function setTab(el) {
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+    }
+  </script>
+
+</body>
+</html>
