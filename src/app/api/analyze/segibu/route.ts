@@ -107,10 +107,17 @@ export async function POST(req: Request) {
       systemInstruction: SYSTEM_INSTRUCTION,
     });
 
-    const result = await model.generateContent([
-      { inlineData: { mimeType: 'application/pdf', data: base64 } },
-      '위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.',
-    ]);
+    const result = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: 'application/pdf', data: base64 } },
+          { text: '위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.' },
+        ],
+      }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any,
+    });
 
     const raw = result.response.text().trim();
 

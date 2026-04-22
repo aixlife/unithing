@@ -19,13 +19,12 @@ export function StudentModal({ onClose }: { onClose: () => void }) {
     setStep('saving');
     const newStudent = await addStudent({ ...form, naesin_data: null, segibu_pdf_url: null });
     if (pdfFile && newStudent) {
-      setStep('analyzing');
-      await analyzeSegibu(pdfFile, newStudent);
+      analyzeSegibu(pdfFile, newStudent); // fire-and-forget — 모달 닫은 후 Service3가 진행 표시
     }
     onClose();
   };
 
-  const btnLabel = step === 'saving' ? '저장 중...' : step === 'analyzing' ? '분석 중...' : '등록';
+  const btnLabel = step === 'saving' ? '저장 중...' : '등록';
 
   return (
     <div style={{
