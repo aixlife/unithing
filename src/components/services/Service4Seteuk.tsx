@@ -570,7 +570,7 @@ export function Service4Seteuk() {
   };
 
   // 하단 버튼 표시 여부 및 동작
-  const showBottomNav = step !== 1 && step !== 2 && step !== 5 && step !== 6;
+  const showBottomNav = step !== 1 && step !== 2 && step !== 6 && !(step === 5 && (draftLoading || !!draftError));
 
   const getNextLabel = () => {
     if (step === 4) return draftLoading ? '생성 중...' : 'AI 세특 생성하기';
