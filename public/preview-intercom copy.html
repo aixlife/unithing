@@ -17,6 +17,10 @@
       padding: 0;
     }
 
+    html {
+      font-size: clamp(15px, 1.25vw, 20px);
+    }
+
     :root {
       --bg-canvas: #EBECDF;
       --bg-white: #ffffff;
@@ -24,10 +28,10 @@
       --text-primary: #1C2B2C;
       --text-secondary: #5a6a6b;
       --text-muted: #8a9a9b;
-      --accent: #013EA6;
-      --accent-light: #dce8ff;
-      --amber: #FFC43A;
-      --green: #1C5357;
+      --accent: #0D05E5;
+      --accent-light: #e8e8ff;
+      --amber: #617BE2;
+      --green: #063762;
       --red: #DC2626;
     }
 
@@ -40,7 +44,7 @@
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg-canvas);
       color: var(--text-primary);
-      font-size: 14px;
+      font-size: 1rem;
       line-height: 1.5;
       min-height: 100vh;
     }
@@ -49,7 +53,7 @@
     .header {
       background: var(--bg-white);
       border-bottom: 1px solid var(--border);
-      height: 60px;
+      height: clamp(60px, 5vw, 76px);
       display: flex;
       align-items: center;
       padding: 0 24px;
@@ -59,7 +63,7 @@
     }
 
     .logo {
-      font-size: 18px;
+      font-size: 1.25rem;
       font-weight: 800;
       color: #111111;
       letter-spacing: -0.04em;
@@ -82,13 +86,13 @@
       border-radius: 4px;
       background: var(--bg-canvas);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 1rem;
       font-weight: 500;
       color: var(--text-primary);
     }
 
     .student-selector .chevron {
-      font-size: 11px;
+      font-size: 0.75rem;
       color: var(--text-muted);
     }
 
@@ -104,7 +108,7 @@
       border-radius: 50%;
       background: var(--accent);
       color: #fff;
-      font-size: 13px;
+      font-size: 0.875rem;
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -113,7 +117,7 @@
     }
 
     .profile-name {
-      font-size: 13px;
+      font-size: 0.875rem;
       font-weight: 500;
       color: var(--text-secondary);
     }
@@ -121,8 +125,8 @@
     /* ── 3-COLUMN LAYOUT ── */
     .app-layout {
       display: grid;
-      grid-template-columns: 200px 1fr 220px;
-      height: calc(100vh - 60px);
+      grid-template-columns: clamp(200px, 16vw, 300px) 1fr clamp(220px, 18vw, 320px);
+      height: calc(100vh - clamp(60px, 5vw, 76px));
     }
 
     /* ── LEFT SIDEBAR ── */
@@ -135,8 +139,8 @@
 
     .nav-item {
       display: block;
-      padding: 8px 16px;
-      font-size: 14px;
+      padding: 0.55em 1.1em;
+      font-size: 1rem;
       font-weight: 500;
       color: var(--text-secondary);
       text-decoration: none;
@@ -153,7 +157,7 @@
       color: var(--accent);
       font-weight: 600;
       border-left: 3px solid var(--accent);
-      padding-left: 13px;
+      padding-left: calc(1.1em - 3px);
     }
 
     .nav-divider {
@@ -163,7 +167,7 @@
     }
 
     .nav-section-label {
-      font-size: 11px;
+      font-size: 0.75rem;
       font-weight: 700;
       letter-spacing: 0.08em;
       color: var(--text-muted);
@@ -191,8 +195,8 @@
     }
 
     .tab {
-      padding: 12px 16px;
-      font-size: 14px;
+      padding: 0.85em 1.1em;
+      font-size: 1rem;
       font-weight: 500;
       color: var(--text-secondary);
       cursor: pointer;
@@ -235,7 +239,7 @@
       padding: 60px 0;
       text-align: center;
       color: var(--text-muted);
-      font-size: 14px;
+      font-size: 1rem;
     }
 
     /* ── STUDENT INFO BAR ── */
@@ -251,14 +255,14 @@
     }
 
     .student-name {
-      font-size: 20px;
+      font-size: 1.4rem;
       font-weight: 700;
       color: var(--text-primary);
       letter-spacing: -0.02em;
     }
 
     .student-sub {
-      font-size: 14px;
+      font-size: 1rem;
       color: var(--text-secondary);
       margin-top: 2px;
     }
@@ -271,7 +275,7 @@
     }
 
     .badge {
-      font-size: 12px;
+      font-size: 0.8rem;
       font-weight: 600;
       padding: 3px 10px;
       border-radius: 4px;
@@ -293,7 +297,7 @@
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 8px 16px;
-      font-size: 13px;
+      font-size: 0.875rem;
       font-weight: 500;
       cursor: pointer;
       font-family: inherit;
@@ -331,7 +335,7 @@
     }
 
     .score-number {
-      font-size: 52px;
+      font-size: clamp(44px, 4vw, 68px);
       font-weight: 700;
       line-height: 1;
       letter-spacing: -2px;
@@ -350,14 +354,14 @@
     }
 
     .score-label {
-      font-size: 14px;
+      font-size: 1rem;
       font-weight: 600;
       color: var(--text-primary);
       margin-top: 6px;
     }
 
     .score-sublabel {
-      font-size: 12px;
+      font-size: 0.8rem;
       color: var(--text-muted);
       margin-top: 2px;
     }
@@ -388,7 +392,7 @@
     }
 
     .score-desc {
-      font-size: 13px;
+      font-size: 0.9rem;
       color: var(--text-secondary);
       line-height: 1.5;
     }
@@ -413,7 +417,7 @@
     }
 
     .card-title {
-      font-size: 15px;
+      font-size: 1.05rem;
       font-weight: 700;
       color: var(--text-primary);
     }
@@ -436,7 +440,7 @@
 
     .grade-label {
       width: 32px;
-      font-size: 13px;
+      font-size: 0.9rem;
       color: var(--text-secondary);
       flex-shrink: 0;
     }
@@ -469,7 +473,7 @@
     .grade-value {
       width: 28px;
       text-align: right;
-      font-size: 13px;
+      font-size: 0.9rem;
       font-weight: 600;
       flex-shrink: 0;
     }
@@ -503,7 +507,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: 0.8rem;
       font-weight: 600;
       color: var(--text-muted);
       letter-spacing: 0.06em;
@@ -531,7 +535,7 @@
     }
 
     .strategy-text {
-      font-size: 13px;
+      font-size: 0.9rem;
       color: var(--text-secondary);
       line-height: 1.6;
     }
@@ -552,13 +556,13 @@
     }
 
     .report-title {
-      font-size: 16px;
+      font-size: 1.1rem;
       font-weight: 700;
       color: var(--text-primary);
     }
 
     .report-date {
-      font-size: 12px;
+      font-size: 0.8rem;
       color: var(--text-muted);
     }
 
@@ -572,8 +576,8 @@
       padding: 12px 16px;
       border-radius: 0 4px 4px 0;
       margin-bottom: 18px;
-      font-size: 14px;
-      color: #013EA6;
+      font-size: 1rem;
+      color: var(--accent);
       line-height: 1.6;
     }
 
@@ -585,7 +589,7 @@
     }
 
     .report-col-label {
-      font-size: 12px;
+      font-size: 0.8rem;
       font-weight: 700;
       color: var(--text-muted);
       letter-spacing: 0.06em;
@@ -601,7 +605,7 @@
     }
 
     .report-list li {
-      font-size: 13px;
+      font-size: 0.9rem;
       color: var(--text-secondary);
       line-height: 1.6;
       padding-left: 12px;
@@ -627,7 +631,7 @@
     }
 
     .report-strategy-label {
-      font-size: 12px;
+      font-size: 0.8rem;
       font-weight: 700;
       color: var(--text-muted);
       letter-spacing: 0.06em;
@@ -636,7 +640,7 @@
     }
 
     .report-strategy-text {
-      font-size: 13px;
+      font-size: 0.9rem;
       color: var(--text-secondary);
       line-height: 1.7;
     }
@@ -650,7 +654,7 @@
     }
 
     .sidebar-section-title {
-      font-size: 13px;
+      font-size: 0.9rem;
       font-weight: 700;
       color: var(--text-primary);
       margin-bottom: 12px;
@@ -672,7 +676,7 @@
     }
 
     .univ-name {
-      font-size: 13px;
+      font-size: 0.9rem;
       font-weight: 600;
       color: var(--text-primary);
       margin-bottom: 5px;
@@ -694,7 +698,7 @@
     }
 
     .univ-match-pct {
-      font-size: 12px;
+      font-size: 0.8rem;
       font-weight: 600;
       color: var(--accent);
       text-align: right;
@@ -711,14 +715,14 @@
     }
 
     .book-title {
-      font-size: 13px;
+      font-size: 0.9rem;
       font-weight: 600;
       color: var(--text-primary);
       margin-bottom: 4px;
     }
 
     .book-link {
-      font-size: 12px;
+      font-size: 0.8rem;
       color: var(--accent);
       cursor: pointer;
       text-decoration: none;
@@ -730,7 +734,7 @@
 
     /* Recent activity */
     .activity-item {
-      font-size: 12px;
+      font-size: 0.8rem;
       color: var(--text-secondary);
       margin-bottom: 6px;
       line-height: 1.5;
@@ -747,7 +751,7 @@
       border-top: 1px solid var(--border);
       padding: 20px;
       text-align: center;
-      font-size: 12px;
+      font-size: 0.8rem;
       color: var(--text-muted);
     }
 
