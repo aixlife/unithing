@@ -29,10 +29,12 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setCurrentStudentState(s);
   };
 
-  // 학생 바뀌면 저장된 분석 결과 로드 (없으면 null)
+  // 학생 바뀌면 저장된 분석 결과 로드 (없거나 구형 포맷이면 null)
   useEffect(() => {
-    if (currentStudent?.segibu_analysis) {
-      setSegibuAnalysis(currentStudent.segibu_analysis);
+    const raw = currentStudent?.segibu_analysis;
+    // structuredData 필드 존재 여부로 신규 포맷 검증 — 구형이면 재분석 유도
+    if (raw && raw.structuredData && raw.highlights && raw.scores) {
+      setSegibuAnalysis(raw);
     } else {
       setSegibuAnalysis(null);
     }
