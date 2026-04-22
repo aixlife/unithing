@@ -1,5 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useStudent } from '@/contexts/StudentContext';
+import { SegibuAnalysis, CompKey } from '@/types/analysis';
 
 const T = {
   primary: '#1B64DA', primaryHover: '#1756BC',
@@ -19,7 +21,6 @@ const T = {
   },
 } as const;
 
-type CompKey = 'academic' | 'career' | 'community';
 const FONT = "'Pretendard Variable', Pretendard, sans-serif";
 
 // ─── Radar chart ──────────────────────────────────────────────────────────────
@@ -75,22 +76,11 @@ function RadarChart({ data, size = 240 }: {
 }
 
 // ─── Word cloud ───────────────────────────────────────────────────────────────
-const WORDS = [
-  { text: '탐구', size: 34 }, { text: '생명과학', size: 30 },
-  { text: '자기주도', size: 26 }, { text: '리더십', size: 22 },
-  { text: '협업', size: 24 }, { text: '의학', size: 32 },
-  { text: '윤리', size: 18 }, { text: '독서', size: 20 },
-  { text: '논리적사고', size: 22 }, { text: '실험설계', size: 19 },
-  { text: '봉사', size: 17 }, { text: '창의성', size: 24 },
-  { text: '발표', size: 16 }, { text: '분석력', size: 21 },
-  { text: 'DNA', size: 18 }, { text: '끈기', size: 15 },
-];
-
-function WordCloud() {
+function WordCloud({ words }: { words: { text: string; size: number }[] }) {
   const colors = [T.primary, T.text, T.textMuted, T.primary, T.text, T.textMuted];
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', alignItems: 'center', justifyContent: 'center', padding: '24px 10px', minHeight: 180 }}>
-      {WORDS.map((w, i) => (
+      {words.map((w, i) => (
         <span key={i} style={{
           fontSize: w.size, fontWeight: w.size > 22 ? 800 : 600,
           color: colors[i % colors.length],
@@ -218,55 +208,7 @@ function CompetencyCell({ evalObj, mode, label, compKey }: {
   );
 }
 
-// ─── Activity data ────────────────────────────────────────────────────────────
-const ACTIVITIES = [
-  {
-    name: 'mRNA 백신 심화탐구', type: '세특', typeTone: 'primary', subject: '생명과학Ⅱ',
-    summary: '화이자·모더나 논문 2편 원문 독해 후, LNP 전달시스템과 국내 제약산업 특허 분석 보고서 작성',
-    eval: {
-      academic: { score: 95, stars: 5, why: '논문 원문 독해 + 특허 데이터 분석까지 확장된 깊이 있는 자기주도 탐구예요.', fix: '탐구 결과를 도표·그래프로 시각화하면 완성도가 올라가요.' },
-      career:   { score: 92, stars: 5, why: '의예과 지망 학생에게 가장 이상적인 주제·방법론 조합이에요.', fix: '국내 제약산업 관계자 인터뷰 1건을 추가하면 진로 탐색 폭이 넓어져요.' },
-      community:{ score: 72, stars: 4, why: '동아리 세미나 발표로 지식을 공유한 부분이 긍정적이에요.', fix: '후배 대상 스터디 개설 등 협업 흔적이 남는 활동을 연계해보세요.' },
-    },
-  },
-  {
-    name: '지역아동센터 학습 봉사', type: '봉사', typeTone: 'success', subject: '진로활동',
-    summary: '3년간 주 1회 초등 수학·과학 학습 지도 · 누적 120시간 · 개별 학습계획표 직접 설계',
-    eval: {
-      academic: { score: 68, stars: 3, why: '교과 지식을 쉽게 재구성해 가르친 경험이 학업 이해도를 드러내요.', fix: '학습지 설계 과정을 세특에 연결하면 학업역량에 더 기여해요.' },
-      career:   { score: 74, stars: 4, why: '의료·보건 진로와는 결이 다르지만, 사람을 돕는 진로 동기로 해석 가능해요.', fix: '다음에는 지역 병원 건강교실 같은 의료 맥락 봉사로 전환을 권장해요.' },
-      community:{ score: 94, stars: 5, why: '3년 지속 + 누적 120시간은 공동체역량 최상위 지표예요.', fix: '봉사 결과를 정리한 회고록 1편을 남기면 서사가 강해져요.' },
-    },
-  },
-  {
-    name: '과학 동아리 부장 (BIOLAB)', type: '동아리', typeTone: 'accent', subject: '자율활동',
-    summary: '2년차 부장 · 연간 탐구 주제 6건 기획 · 신입 부원 멘토링 제도 도입 · 과학축제 부스 운영 주관',
-    eval: {
-      academic: { score: 80, stars: 4, why: '탐구 주제 6건 기획이 학업적 사고의 폭을 잘 보여줘요.', fix: '기획한 주제 중 1건을 본인이 끝까지 주도한 기록이 있으면 좋겠어요.' },
-      career:   { score: 86, stars: 4, why: '의예과 관련 주제로 동아리를 이끈 점이 진로 주도성을 명확히 드러내요.', fix: '병원·대학 연구실과 연계한 외부 특강 1회를 조직해보세요.' },
-      community:{ score: 90, stars: 5, why: '멘토링 제도 도입은 구성원을 살피는 리더십의 전형이에요.', fix: '제도 도입 후 성과(참여율·후기)를 수치로 남기면 증빙이 강해져요.' },
-    },
-  },
-  {
-    name: '의료윤리 독서 감상문', type: '독서', typeTone: 'default', subject: '진로활동',
-    summary: '「의사와 수의사가 만나다」 독후 감상문 · 1학년 2학기 기록 · 이후 관련 독서 기록 없음',
-    eval: {
-      academic: { score: 55, stars: 3, why: '독서 기록이 짧고 감상 중심이라 학업적 분석은 부족해요.', fix: '책 속 쟁점 1개를 골라 비판적 에세이로 확장해보세요.' },
-      career:   { score: 60, stars: 3, why: '의료윤리 주제 자체는 진로 적합도가 높지만, 1학년 1회로 그쳐 아쉬워요.', fix: '2~3권 추가 독서로 3년간의 연속성을 만들어주세요.' },
-      community:{ score: 48, stars: 2, why: '개인 독서 활동이라 공동체 맥락이 드러나지 않아요.', fix: '독서 토론회·북클럽에서 발표 경험으로 확장해보세요.' },
-    },
-  },
-  {
-    name: '교내 모의 UN · 보건분과', type: '자율', typeTone: 'primary', subject: '자율활동',
-    summary: 'WHO 대표단 역할 · 백신 불평등 의제 결의안 공동 발의 · 2학년 1학기',
-    eval: {
-      academic: { score: 78, stars: 4, why: '국제 보건 이슈를 자료 기반으로 정리한 점이 학업적으로 가치 있어요.', fix: '결의안 근거 자료의 출처·통계를 더 정교하게 인용해주세요.' },
-      career:   { score: 82, stars: 4, why: '백신 심화탐구와 주제가 자연스럽게 이어져 진로 일관성을 보완해줘요.', fix: '이 경험을 다음 탐구의 문제의식으로 연결한 흔적을 남겨보세요.' },
-      community:{ score: 85, stars: 4, why: '공동 발의 과정에서 협상·설득 역량이 드러난 점이 좋아요.', fix: '분과 내에서 본인이 해결한 구체적 갈등 에피소드 1건을 기록해두세요.' },
-    },
-  },
-];
-
+// ─── Badge ────────────────────────────────────────────────────────────────────
 const BADGE_COLORS: Record<string, { bg: string; color: string }> = {
   primary: { bg: T.primarySoft, color: T.primary },
   success: { bg: T.successSoft, color: T.success },
@@ -284,7 +226,11 @@ function Badge({ tone, children }: { tone: string; children: React.ReactNode }) 
 }
 
 // ─── Activity eval table ──────────────────────────────────────────────────────
-function ActivityEvalTable({ mode, onModeChange }: { mode: 'stars' | 'score'; onModeChange: (m: 'stars' | 'score') => void }) {
+function ActivityEvalTable({ activities, mode, onModeChange }: {
+  activities: SegibuAnalysis['activities'];
+  mode: 'stars' | 'score';
+  onModeChange: (m: 'stars' | 'score') => void;
+}) {
   return (
     <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 24, marginBottom: 16, overflowX: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -320,11 +266,11 @@ function ActivityEvalTable({ mode, onModeChange }: { mode: 'stars' | 'score'; on
           <div style={{ textAlign: 'center', color: T.comp.career.color }}>진로역량</div>
           <div style={{ textAlign: 'center', color: T.comp.community.color }}>공동체역량</div>
         </div>
-        {ACTIVITIES.map((a, i) => (
+        {activities.map((a, i) => (
           <div key={i} style={{
             display: 'grid', gridTemplateColumns: '1.8fr 0.7fr 2.4fr 0.9fr 0.9fr 0.9fr',
             padding: '16px', alignItems: 'center',
-            borderBottom: i === ACTIVITIES.length - 1 ? 'none' : `1px solid ${T.border}`,
+            borderBottom: i === activities.length - 1 ? 'none' : `1px solid ${T.border}`,
             gap: 8,
           }}>
             <div>
@@ -358,30 +304,80 @@ function ActivityEvalTable({ mode, onModeChange }: { mode: 'stars' | 'score'; on
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-const SUBJECTS = [
-  { name: '통합과학', score: 'A', keyword: '생명과학 심화탐구 주도' },
-  { name: '수학Ⅱ', score: 'A', keyword: '미적분 응용, 문제풀이 전략' },
-  { name: '생명과학Ⅰ', score: 'A+', keyword: 'DNA 복제 메커니즘 발표' },
-  { name: '화학Ⅰ', score: 'A', keyword: '완충용액 실험 설계' },
-  { name: '영어Ⅱ', score: 'B+', keyword: '의학 논문 원문 읽기 동아리' },
-  { name: '한국사', score: 'A', keyword: '근현대 의료사 리포트' },
-];
-
 export function Service3Segibu() {
+  const { segibuAnalysis, analyzeSegibu, analysisLoading, analysisError, currentStudent } = useStudent();
   const [scoreMode, setScoreMode] = useState<'stars' | 'score'>('stars');
   const [yearTab, setYearTab] = useState(2);
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const radarData: { label: string; value: number; compKey: CompKey }[] = [
-    { label: '학업역량', value: 88, compKey: 'academic' },
-    { label: '진로역량', value: 76, compKey: 'career' },
-    { label: '공동체역량', value: 82, compKey: 'community' },
-  ];
+  // 업로드 화면
+  if (!segibuAnalysis) {
+    return (
+      <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 560, margin: '40px auto' }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: T.text, marginBottom: 6, fontFamily: FONT }}>생기부 AI 분석</div>
+        <div style={{ fontSize: 16, color: T.textMuted, marginBottom: 20 }}>
+          {currentStudent ? `${currentStudent.name} 학생의 ` : ''}생기부 PDF를 업로드하면 AI가 종합 분석해드려요.
+        </div>
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f?.type === 'application/pdf') setFile(f); }}
+          style={{ border: `2px dashed ${dragOver ? T.primary : T.borderStrong}`, borderRadius: 12, padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', background: dragOver ? T.primarySoft : T.bgAlt, transition: 'all 0.15s' }}
+        >
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke={T.textSubtle} strokeWidth="1.8" fill="none"/>
+            <polyline points="14 2 14 8 20 8" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round"/>
+            <line x1="12" y1="18" x2="12" y2="12" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round"/>
+            <polyline points="9 15 12 12 15 15" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <div style={{ fontSize: 16, fontWeight: 600, color: T.textMuted }}>{file ? file.name : '생기부 PDF를 끌어다 놓거나 클릭해 선택'}</div>
+          <div style={{ fontSize: 14, color: T.textSubtle }}>최대 20MB · PDF만 가능</div>
+        </div>
+        <input ref={fileRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+        {analysisError && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: T.dangerSoft, color: T.danger, fontSize: 14 }}>
+            {analysisError}
+          </div>
+        )}
+        <button
+          onClick={() => { if (file) analyzeSegibu(file); }}
+          disabled={!file || analysisLoading}
+          style={{ marginTop: 16, width: '100%', height: 48, borderRadius: 10, background: file && !analysisLoading ? T.primary : T.bgAlt, color: file && !analysisLoading ? '#fff' : T.textSubtle, border: 'none', fontSize: 16, fontWeight: 700, cursor: file && !analysisLoading ? 'pointer' : 'not-allowed', fontFamily: FONT }}
+        >
+          {analysisLoading ? '⏳ AI 분석 중... (30~60초)' : 'AI 분석 시작'}
+        </button>
+      </div>
+    );
+  }
+
+  // 분석 완료 화면
+  const radarData: { label: string; value: number; compKey: CompKey }[] = segibuAnalysis.radar.map(r => ({
+    label: r.compKey === 'academic' ? '학업역량' : r.compKey === 'career' ? '진로역량' : '공동체역량',
+    value: r.value,
+    compKey: r.compKey,
+  }));
 
   const STATS = [
-    { label: '분석된 세특 과목', value: '18', unit: '개', key: 'academic' as CompKey },
-    { label: '추출 핵심 키워드', value: '127', unit: '개', key: 'career' as CompKey },
-    { label: '적정 대학 매칭', value: '24', unit: '곳', key: 'community' as CompKey },
+    { label: '분석된 세특 과목', value: String(segibuAnalysis.stats.subjectCount), unit: '개', key: 'academic' as CompKey },
+    { label: '추출 핵심 키워드', value: String(segibuAnalysis.stats.keywordCount), unit: '개', key: 'career' as CompKey },
+    { label: '적정 대학 매칭', value: '분석 중', unit: '', key: 'community' as CompKey },
   ];
+
+  const yearlySubjects = segibuAnalysis.yearlySubjects[String(yearTab + 1) as '1' | '2' | '3'] ?? [];
+
+  const handleReanalyze = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf';
+    input.onchange = (e) => {
+      const f = (e.target as HTMLInputElement).files?.[0];
+      if (f) analyzeSegibu(f);
+    };
+    input.click();
+  };
 
   return (
     <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -393,22 +389,34 @@ export function Service3Segibu() {
             <Badge tone="success">분석 완료</Badge>
           </div>
           <h1 style={{ fontSize: 'clamp(28px, 3.2vw, 44px)', fontWeight: 800, letterSpacing: '-0.035em', color: T.text, margin: 0, lineHeight: 1.2, fontFamily: FONT }}>
-            김지우 학생의 생기부 리포트
+            {segibuAnalysis.studentName} 학생의 생기부 리포트
           </h1>
           <div style={{ fontSize: 'clamp(16px, 1.5vw, 19px)', color: T.textMuted, marginTop: 6, letterSpacing: '-0.01em', fontFamily: FONT }}>
-            서울대치고등학교 · 고3 · 희망 의예과·생명공학과 · 분석일 2026.04.17 14:32
+            {segibuAnalysis.school} · {segibuAnalysis.grade} · 희망 {segibuAnalysis.targetDept}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          {(['PDF 저장', '인쇄', '다시 분석'] as const).map((label, i) => (
+          {(['PDF 저장', '인쇄'] as const).map((label) => (
             <button key={label} style={{
               padding: '8px 14px', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: 'pointer',
-              background: i === 2 ? T.primary : 'transparent',
-              color: i === 2 ? '#fff' : T.text,
-              border: `1px solid ${i === 2 ? T.primary : T.borderStrong}`,
+              background: 'transparent',
+              color: T.text,
+              border: `1px solid ${T.borderStrong}`,
               fontFamily: FONT, letterSpacing: '-0.01em',
             }}>{label}</button>
           ))}
+          <button
+            onClick={handleReanalyze}
+            style={{
+              padding: '8px 14px', borderRadius: 8, fontSize: 16, fontWeight: 700, cursor: 'pointer',
+              background: T.primary,
+              color: '#fff',
+              border: `1px solid ${T.primary}`,
+              fontFamily: FONT, letterSpacing: '-0.01em',
+            }}
+          >
+            다시 분석
+          </button>
         </div>
       </div>
 
@@ -421,17 +429,17 @@ export function Service3Segibu() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 'clamp(15px, 1.4vw, 18px)', color: T.textMuted, fontWeight: 500, letterSpacing: '-0.01em', fontFamily: FONT }}>3대 역량 종합 점수</div>
             <div style={{ fontSize: 'clamp(48px, 5.5vw, 72px)', fontWeight: 800, letterSpacing: '-0.045em', color: T.primary, lineHeight: 1, marginTop: 6, fontFamily: FONT }}>
-              82<span style={{ fontSize: 20, color: T.textSubtle, fontWeight: 600, letterSpacing: '-0.02em' }}> / 100</span>
+              {segibuAnalysis.totalScore}<span style={{ fontSize: 20, color: T.textSubtle, fontWeight: 600, letterSpacing: '-0.02em' }}> / 100</span>
             </div>
             <div style={{ display: 'inline-flex', marginTop: 12, alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: T.successSoft, color: T.success, fontSize: 15, fontWeight: 700, fontFamily: FONT }}>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M5 8V2M5 2L2 5M5 2l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              상위 18% · 지난 분석 대비 +4점
+              {segibuAnalysis.percentile}
             </div>
             <div style={{ marginTop: 20, padding: '14px 16px', borderRadius: 12, background: T.primarySoft, fontSize: 16, color: T.text, lineHeight: 1.65, letterSpacing: '-0.01em', border: `1px solid ${T.primaryBorder}`, fontFamily: FONT }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.primary, letterSpacing: '0.06em', marginBottom: 6 }}>AI 한줄평</div>
-              학업역량과 공동체역량이 고르게 높고, 생명과학 탐구의 일관성이 돋보입니다. 진로역량에서 의료윤리 관련 독서 활동을 보강하면 리포트의 완성도가 더 올라갈 것으로 예상돼요.
+              {segibuAnalysis.aiComment}
             </div>
           </div>
         </div>
@@ -456,14 +464,20 @@ export function Service3Segibu() {
       <div>
         <h2 style={{ fontSize: 'clamp(17px, 1.7vw, 22px)', fontWeight: 700, color: T.text, letterSpacing: '-0.02em', margin: '0 0 12px 2px', fontFamily: FONT }}>역량별 상세 분석</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-          <CompetencyCard title="학업역량" score={88} compKey="academic" items={['이과 전 과목 내신 1.4등급 유지, 꾸준한 학업 성취', '생명과학 심화탐구 2건에서 실험 설계 주도', '수학 탐구 보고서의 논리 전개가 명확함']} />
-          <CompetencyCard title="진로역량" score={76} compKey="career" items={['의예과 관련 교내 동아리 2년 지속 활동', '의료윤리 주제 독서활동이 1학년에 집중됨', '병원 견학 연계 진로 탐구 확장 권장']} />
-          <CompetencyCard title="공동체역량" score={82} compKey="community" items={['학급 부반장, 과학동아리 부장 경험', '지역아동센터 봉사 120시간 (3년 누적)', '팀 프로젝트에서 조율자 역할 반복 등장']} />
+          {segibuAnalysis.competencies.map((comp) => (
+            <CompetencyCard
+              key={comp.compKey}
+              title={comp.title}
+              score={comp.score}
+              compKey={comp.compKey}
+              items={comp.items}
+            />
+          ))}
         </div>
       </div>
 
       {/* Activity eval table */}
-      <ActivityEvalTable mode={scoreMode} onModeChange={setScoreMode} />
+      <ActivityEvalTable activities={segibuAnalysis.activities} mode={scoreMode} onModeChange={setScoreMode} />
 
       {/* Year tabs + subjects */}
       <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 24 }}>
@@ -483,7 +497,7 @@ export function Service3Segibu() {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-          {SUBJECTS.map((s, i) => (
+          {yearlySubjects.map((s, i) => (
             <div key={i} style={{ padding: 16, borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ fontSize: 17, fontWeight: 700, color: T.text, letterSpacing: '-0.01em', fontFamily: FONT }}>{s.name}</div>
@@ -501,7 +515,7 @@ export function Service3Segibu() {
           <h2 style={{ fontSize: 'clamp(17px, 1.7vw, 22px)', fontWeight: 700, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>핵심 키워드</h2>
           <div style={{ fontSize: 15, color: T.textMuted, fontFamily: FONT }}>3년간 생기부에서 추출</div>
         </div>
-        <WordCloud />
+        <WordCloud words={segibuAnalysis.words} />
       </div>
     </div>
   );
