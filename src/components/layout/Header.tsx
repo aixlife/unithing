@@ -126,6 +126,7 @@ export function Header() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const userName = session?.user?.name ?? '';
+  const userEmail = session?.user?.email ?? '';
   const userImage = session?.user?.image ?? '';
 
   return (
@@ -175,8 +176,12 @@ export function Header() {
             <div style={{
               position: 'absolute', top: 'calc(100% + 8px)', right: 0,
               background: '#fff', border: '1px solid #E5E8EB', borderRadius: 12,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.08)', minWidth: 140, overflow: 'hidden',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.08)', minWidth: 180, overflow: 'hidden',
             }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E8EB' }}>
+                {userName && <div style={{ fontSize: 13, fontWeight: 700, color: '#191F28', marginBottom: 2 }}>{userName}</div>}
+                <div style={{ fontSize: 12, color: '#8B95A1' }}>{userEmail}</div>
+              </div>
               <button onClick={() => signOut({ callbackUrl: '/login' })} style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '12px 16px', fontSize: 14, color: '#DC2626', fontWeight: 600,
