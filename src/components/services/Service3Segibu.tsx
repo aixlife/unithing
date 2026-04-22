@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 import { SegibuAnalysis, CompKey } from '@/types/analysis';
 
@@ -304,6 +304,18 @@ function ActivityEvalTable({ activities, mode, onModeChange }: {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+const ANALYSIS_STAGES = [
+  { until: 25, label: 'PDF 파일을 읽는 중...' },
+  { until: 55, label: 'AI가 활동 내용을 파악하는 중...' },
+  { until: 78, label: '3대 역량 점수를 계산하는 중...' },
+  { until: 92, label: '최종 리포트를 생성하는 중...' },
+  { until: 100, label: '거의 다 됐어요!' },
+];
+
+function getStageLabel(progress: number) {
+  return ANALYSIS_STAGES.find(s => progress < s.until)?.label ?? '거의 다 됐어요!';
+}
+
 export function Service3Segibu() {
   const { segibuAnalysis, analyzeSegibu, analysisLoading, analysisError, currentStudent } = useStudent();
   const [scoreMode, setScoreMode] = useState<'stars' | 'score'>('stars');
@@ -311,30 +323,76 @@ export function Service3Segibu() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!analysisLoading) { setProgress(0); return; }
+    setProgress(0);
+    const interval = setInterval(() => {
+      setProgress(p => {
+        if (p >= 92) return p;
+        // 빠르게 시작하다가 점점 느려지는 가속도 커브
+        const remaining = 92 - p;
+        const step = Math.max(0.2, remaining * 0.025) + Math.random() * 0.4;
+        return Math.min(92, p + step);
+      });
+    }, 350);
+    return () => clearInterval(interval);
+  }, [analysisLoading]);
 
   // 로딩 화면
   if (analysisLoading) {
+    const stageLabel = getStageLabel(progress);
     return (
-      <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '64px 32px', maxWidth: 560, margin: '40px auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+      <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '52px 40px', maxWidth: 560, margin: '40px auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
         <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
           <circle cx="26" cy="26" r="22" stroke={T.border} strokeWidth="4"/>
           <path d="M26 4a22 22 0 0 1 22 22" stroke={T.primary} strokeWidth="4" strokeLinecap="round">
             <animateTransform attributeName="transform" type="rotate" from="0 26 26" to="360 26 26" dur="0.75s" repeatCount="indefinite"/>
           </path>
         </svg>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>AI가 생기부를 분석하고 있어요</div>
-          <div style={{ fontSize: 15, color: T.textMuted, marginTop: 8, lineHeight: 1.6, fontFamily: FONT }}>
-            {file?.name && <><span style={{ color: T.text, fontWeight: 600 }}>{file.name}</span><br/></>}
-            보통 30~60초 정도 걸려요. 잠시만 기다려 주세요.
+
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT, marginBottom: 6 }}>
+            AI가 생기부를 분석하고 있어요
+          </div>
+          {file?.name && (
+            <div style={{ fontSize: 14, color: T.textMuted, fontFamily: FONT }}>{file.name}</div>
+          )}
+        </div>
+
+        {/* 프로그레스 바 */}
+        <div style={{ width: '100%' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 14, color: T.textMuted, fontFamily: FONT }}>{stageLabel}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.primary, fontFamily: FONT, letterSpacing: '-0.02em' }}>
+              {Math.round(progress)}%
+            </div>
+          </div>
+          <div style={{ width: '100%', height: 8, background: T.bgAlt, borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{
+              width: `${progress}%`, height: '100%',
+              background: `linear-gradient(90deg, ${T.primary} 0%, #5B9BFF 100%)`,
+              borderRadius: 8,
+              transition: 'width 0.35s ease-out',
+            }} />
+          </div>
+
+          {/* 단계 마커 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+            {ANALYSIS_STAGES.slice(0, -1).map((s, i) => (
+              <div key={i} style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: progress >= s.until ? T.primary : T.border,
+                transition: 'background 0.3s',
+                flexShrink: 0,
+              }} />
+            ))}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: T.primary, opacity: 0.3 }}>
-              <animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin={`${i * 0.4}s`} repeatCount="indefinite"/>
-            </div>
-          ))}
+
+        <div style={{ fontSize: 14, color: T.textSubtle, fontFamily: FONT }}>
+          보통 30~60초 정도 걸려요
         </div>
       </div>
     );
