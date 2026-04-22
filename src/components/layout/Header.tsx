@@ -126,6 +126,7 @@ export function Header() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const userName = session?.user?.name ?? '';
+  const userImage = session?.user?.image ?? '';
 
   return (
     <header style={{
@@ -149,14 +150,24 @@ export function Header() {
             display: 'flex', alignItems: 'center', gap: 8,
             background: 'none', border: 'none', cursor: 'pointer', padding: 0,
           }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: '#EFF1F4', color: '#4E5968',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700, border: '1px solid #E5E8EB',
-            }}>
-              {userName.slice(-1)}
-            </div>
+            {userImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={userImage}
+                alt={userName}
+                referrerPolicy="no-referrer"
+                style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid #E5E8EB', objectFit: 'cover' }}
+              />
+            ) : (
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: '#EFF1F4', color: '#4E5968',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700, border: '1px solid #E5E8EB',
+              }}>
+                {userName.slice(0, 1)}
+              </div>
+            )}
             <span className="ut-desktop-only" style={{ fontSize: 14, color: '#191F28', fontWeight: 600 }}>{userName}</span>
           </button>
 
