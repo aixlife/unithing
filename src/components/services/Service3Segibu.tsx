@@ -312,6 +312,34 @@ export function Service3Segibu() {
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 로딩 화면
+  if (analysisLoading) {
+    return (
+      <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '64px 32px', maxWidth: 560, margin: '40px auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+        <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+          <circle cx="26" cy="26" r="22" stroke={T.border} strokeWidth="4"/>
+          <path d="M26 4a22 22 0 0 1 22 22" stroke={T.primary} strokeWidth="4" strokeLinecap="round">
+            <animateTransform attributeName="transform" type="rotate" from="0 26 26" to="360 26 26" dur="0.75s" repeatCount="indefinite"/>
+          </path>
+        </svg>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>AI가 생기부를 분석하고 있어요</div>
+          <div style={{ fontSize: 15, color: T.textMuted, marginTop: 8, lineHeight: 1.6, fontFamily: FONT }}>
+            {file?.name && <><span style={{ color: T.text, fontWeight: 600 }}>{file.name}</span><br/></>}
+            보통 30~60초 정도 걸려요. 잠시만 기다려 주세요.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: T.primary, opacity: 0.3 }}>
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="1.2s" begin={`${i * 0.4}s`} repeatCount="indefinite"/>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // 업로드 화면
   if (!segibuAnalysis) {
     return (

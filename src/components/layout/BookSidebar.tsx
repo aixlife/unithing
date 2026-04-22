@@ -16,10 +16,15 @@ export function BookSidebar() {
       </div>
 
       {/* 학과 바이블 — 실제 도서 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{
+      <a
+        href="https://campusmentor.co.kr/product/2022-%EA%B0%9C%EC%A0%95-%EA%B5%90%EC%9C%A1%EA%B3%BC%EC%A0%95-%EB%B0%98%EC%98%81%ED%95%99%EA%B3%BC%EB%B0%94%EC%9D%B4%EB%B8%94/2510/category/24/display/1/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ display: 'flex', flexDirection: 'column', gap: 10, textDecoration: 'none' }}
+      >
+        <div className="book-img-wrap" style={{
           width: 156, height: 208, borderRadius: 4, overflow: 'hidden',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.12)', position: 'relative',
+          position: 'relative',
         }}>
           <Image
             src="/book-hakgwa-bible.jpeg"
@@ -36,20 +41,7 @@ export function BookSidebar() {
           }}>학과바이블</div>
           <div style={{ fontSize: 11, color: '#4E5968', marginTop: 2 }}>계열별 학과 백과</div>
         </div>
-        <a
-          href="https://www.campusmentor.co.kr"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'block', padding: '8px 10px', fontSize: 12, fontWeight: 700,
-            background: 'transparent', color: '#191F28',
-            border: '1px solid #D1D6DB', borderRadius: 8,
-            textAlign: 'center', cursor: 'pointer',
-          }}
-        >
-          구매하기
-        </a>
-      </div>
+      </a>
 
       <div style={{
         fontSize: 10, color: '#8B95A1', textAlign: 'center',
