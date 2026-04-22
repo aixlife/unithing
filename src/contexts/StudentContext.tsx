@@ -11,7 +11,7 @@ type StudentContextType = {
   addStudent: (data: Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>) => Promise<Student | null>;
   deleteStudent: (id: string) => Promise<void>;
   segibuAnalysis: SegibuAnalysis | null;
-  analyzeSegibu: (file: File) => Promise<void>;
+  analyzeSegibu: (file: File, studentOverride?: Student) => Promise<void>;
   analysisLoading: boolean;
   analysisError: string | null;
 };
@@ -41,7 +41,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setAnalysisError(null);
   }, [currentStudent?.id]);
 
-  const analyzeSegibu = async (file: File) => {
+  const analyzeSegibu = async (file: File, studentOverride?: Student) => {
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
@@ -52,9 +52,9 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       const data: SegibuAnalysis = await res.json();
       setSegibuAnalysis(data);
 
-      // 현재 학생에 분석 결과 DB 저장
-      if (currentStudent) {
-        const patchRes = await fetch(`/api/students/${currentStudent.id}`, {
+      const target = studentOverride ?? currentStudent;
+      if (target) {
+        const patchRes = await fetch(`/api/students/${target.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ segibu_analysis: data }),
