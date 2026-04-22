@@ -278,11 +278,63 @@ function HighlightCard({ highlight }: { highlight: { academic: string; career: s
   );
 }
 
+// ── 입시 인사이트 카드 데이터 ─────────────────────────────────────────────────
+const INSIGHTS = [
+  {
+    tag: '학업역량',
+    color: COMP_COLOR.academic,
+    title: '학업역량 — 입학사정관이 보는 것',
+    points: [
+      '성적 숫자보다 탐구 과정과 지적 호기심이 핵심',
+      '교과 세특에 자발적 심화 탐구 내용이 담겼는지',
+      '1·2학년 대비 3학년의 성장 서사와 향상 추이',
+    ],
+    note: '전국 평균 등급이 높아도 세특이 빈약하면 상위권 대학에서 낮게 평가됩니다.',
+  },
+  {
+    tag: '진로역량',
+    color: COMP_COLOR.career,
+    title: '진로역량 — 입학사정관이 보는 것',
+    points: [
+      '희망 학과와 교과·활동 간의 구체적 연결 고리',
+      '진로 관련 독서·탐구·활동의 3년간 일관성',
+      '막연한 꿈이 아닌 탐색·실행·반성의 흔적',
+    ],
+    note: '세 역량 중 가장 소홀하기 쉬운 영역입니다. 학과 연계 활동이 적으면 지원 적합성에서 감점됩니다.',
+  },
+  {
+    tag: '공동체역량',
+    color: COMP_COLOR.community,
+    title: '공동체역량 — 입학사정관이 보는 것',
+    points: [
+      '봉사 시간 총합보다 협력·배려·소통의 구체적 내용',
+      '리더 역할과 팔로워 역할 — 상황에 따른 유연함',
+      '갈등 상황에서 문제를 해결하는 과정과 성장',
+    ],
+    note: '단체활동 결과보다 개인이 어떤 역할을 했는지, 무엇을 배웠는지가 평가의 핵심입니다.',
+  },
+  {
+    tag: '생기부 전략',
+    color: '#6366F1',
+    title: '합격을 결정하는 생기부 전략',
+    points: [
+      '기록되지 않은 활동은 없는 것 — 모든 활동을 남겨야',
+      '자기소개서는 생기부의 해설서 — 내용 일관성이 생명',
+      '학교별 특이 이력보다 역량의 일관된 서사가 강력',
+    ],
+    note: '입학사정관은 3년간 학생이 "어떤 사람으로 성장했는가"를 생기부 전체에서 읽어냅니다.',
+  },
+] as const;
+
 // ── 프로그레스 바 포함 로딩 화면 ─────────────────────────────────────────────
 function LoadingScreen({ fileName }: { fileName?: string }) {
   const [progress, setProgress] = useState(0);
+  const [insightIdx, setInsightIdx] = useState(0);
+  const [fade, setFade] = useState(true);
   const stage = STAGES.find(s => progress < s.until)?.label ?? '거의 다 됐어요!';
+  const insight = INSIGHTS[insightIdx];
 
+  // 프로그레스 시뮬레이션
   useEffect(() => {
     const iv = setInterval(() => {
       setProgress(p => {
@@ -296,33 +348,127 @@ function LoadingScreen({ fileName }: { fileName?: string }) {
     return () => clearInterval(iv);
   }, []);
 
+  // 인사이트 카드 자동 슬라이드 (5초)
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setInsightIdx(i => (i + 1) % INSIGHTS.length);
+        setFade(true);
+      }, 300);
+    }, 5000);
+    return () => clearInterval(iv);
+  }, []);
+
   return (
-    <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '52px 40px', maxWidth: 560, margin: '40px auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <circle cx="26" cy="26" r="22" stroke={T.border} strokeWidth="4"/>
-        <path d="M26 4a22 22 0 0 1 22 22" stroke={T.primary} strokeWidth="4" strokeLinecap="round">
-          <animateTransform attributeName="transform" type="rotate" from="0 26 26" to="360 26 26" dur="0.75s" repeatCount="indefinite"/>
-        </path>
-      </svg>
-      <div style={{ textAlign: 'center', width: '100%' }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', marginBottom: 6 }}>AI가 생기부를 분석하고 있어요</div>
-        {fileName && <div style={{ fontSize: 14, color: T.textMuted }}>{fileName}</div>}
+    <div style={{ fontFamily: FONT, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
+
+      {/* 왼쪽: 분석 진행 상태 */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '36px 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: T.textSubtle, textTransform: 'uppercase', marginBottom: 10 }}>AI 분석 진행 중</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.03em', lineHeight: 1.3, marginBottom: 6 }}>
+            생기부를 읽고<br />역량을 분석하고 있어요
+          </div>
+          {fileName && (
+            <div style={{ fontSize: 13, color: T.textMuted, background: T.bgAlt, display: 'inline-block', padding: '3px 10px', borderRadius: 6, marginTop: 4 }}>{fileName}</div>
+          )}
+        </div>
+
+        {/* 프로그레스 */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <div style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>{stage}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: T.primary, letterSpacing: '-0.04em' }}>{Math.round(progress)}%</div>
+          </div>
+          <div style={{ width: '100%', height: 8, background: T.bgAlt, borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ width: `${progress}%`, height: '100%', background: `linear-gradient(90deg, ${T.primary}, #5B9BFF)`, borderRadius: 8, transition: 'width 0.35s ease-out' }} />
+          </div>
+        </div>
+
+        {/* 단계별 체크리스트 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {STAGES.slice(0, -1).map((s, i) => {
+            const done = progress >= s.until;
+            const active = !done && progress >= (STAGES[i - 1]?.until ?? 0);
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: done ? T.primary : active ? T.primarySoft : T.bgAlt,
+                  border: `2px solid ${done ? T.primary : active ? T.primary : T.border}`,
+                  transition: 'all 0.3s',
+                }}>
+                  {done && (
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  {active && <div style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary }} />}
+                </div>
+                <div style={{ fontSize: 13, color: done ? T.textMuted : active ? T.text : T.textSubtle, fontWeight: active ? 600 : 400, transition: 'color 0.3s' }}>{s.label}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 13, color: T.textSubtle, borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+          보통 15~40초 정도 걸려요. 기다리는 동안 오른쪽 내용을 함께 살펴보세요.
+        </div>
       </div>
-      <div style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontSize: 14, color: T.textMuted }}>{stage}</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.primary, letterSpacing: '-0.02em' }}>{Math.round(progress)}%</div>
+
+      {/* 오른쪽: 입시 인사이트 카드 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* 카드 헤더 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.textMuted }}>기다리는 동안 — 입시 인사이트</div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {INSIGHTS.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setFade(false); setTimeout(() => { setInsightIdx(i); setFade(true); }, 150); }}
+                style={{ width: i === insightIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === insightIdx ? T.primary : T.border, border: 'none', cursor: 'pointer', padding: 0, transition: 'all 0.3s' }}
+              />
+            ))}
+          </div>
         </div>
-        <div style={{ width: '100%', height: 8, background: T.bgAlt, borderRadius: 8, overflow: 'hidden' }}>
-          <div style={{ width: `${progress}%`, height: '100%', background: `linear-gradient(90deg, ${T.primary}, #5B9BFF)`, borderRadius: 8, transition: 'width 0.35s ease-out' }} />
+
+        {/* 메인 인사이트 카드 */}
+        <div style={{
+          background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: '28px 28px 24px',
+          borderTop: `4px solid ${insight.color}`,
+          opacity: fade ? 1 : 0, transition: 'opacity 0.3s ease',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: insight.color, textTransform: 'uppercase', marginBottom: 10 }}>{insight.tag}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.text, letterSpacing: '-0.025em', marginBottom: 18, lineHeight: 1.4 }}>{insight.title}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+            {insight.points.map((pt, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: insight.color, marginTop: 7, flexShrink: 0 }} />
+                <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6 }}>{pt}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: T.bgAlt, borderLeft: `3px solid ${insight.color}`, borderRadius: '0 6px 6px 0', padding: '10px 14px' }}>
+            <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }}>{insight.note}</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-          {STAGES.slice(0, -1).map((s, i) => (
-            <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: progress >= s.until ? T.primary : T.border, transition: 'background 0.3s', flexShrink: 0 }} />
+
+        {/* 3개 역량 요약 배지 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {[
+            { label: '학업역량', color: COMP_COLOR.academic, desc: '지적 탐구력' },
+            { label: '진로역량', color: COMP_COLOR.career, desc: '학과 연계성' },
+            { label: '공동체역량', color: COMP_COLOR.community, desc: '협업·리더십' },
+          ].map(({ label, color, desc }) => (
+            <div key={label} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 12, color: T.textSubtle }}>{desc}</div>
+            </div>
           ))}
         </div>
       </div>
-      <div style={{ fontSize: 14, color: T.textSubtle }}>보통 30~90초 정도 걸려요</div>
     </div>
   );
 }
