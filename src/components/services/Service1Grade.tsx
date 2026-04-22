@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -30,8 +30,9 @@ type BadgeType = '도전' | '적정' | '안정';
 interface University {
   name: string;
   dept: string;
-  cut70: number;
-  cut50: number;
+  process: string;
+  type: string;
+  grade: number;
   badge: BadgeType;
 }
 
@@ -39,17 +40,6 @@ interface SubjectRow {
   name: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_UNIVERSITIES: University[] = [
-  { name: '서울대', dept: '의예과', cut70: 1.38, cut50: 1.12, badge: '도전' },
-  { name: '연세대', dept: '의예과', cut70: 1.52, cut50: 1.28, badge: '도전' },
-  { name: '고려대', dept: '의과대학', cut70: 1.61, cut50: 1.38, badge: '도전' },
-  { name: '성균관대', dept: '의예과', cut70: 1.74, cut50: 1.52, badge: '적정' },
-  { name: '한양대', dept: '의예과', cut70: 1.85, cut50: 1.63, badge: '적정' },
-  { name: '경희대', dept: '의예과', cut70: 1.92, cut50: 1.71, badge: '적정' },
-  { name: '인하대', dept: '의예과', cut70: 2.14, cut50: 1.94, badge: '안정' },
-  { name: '아주대', dept: '의예과', cut70: 2.28, cut50: 2.07, badge: '안정' },
-];
 
 const SUBJECTS_BY_YEAR: Record<YearKey, SubjectRow[]> = {
   '1': [
@@ -112,51 +102,25 @@ function UniversityCard({ univ }: { univ: University }) {
         background: T.surface, borderRadius: 12,
         border: `1px solid ${T.border}`,
         overflow: 'hidden',
-        boxShadow: hovered
-          ? '0 6px 20px rgba(0,0,0,0.10)'
-          : '0 1px 4px rgba(0,0,0,0.04)',
+        boxShadow: hovered ? '0 6px 20px rgba(0,0,0,0.10)' : '0 1px 4px rgba(0,0,0,0.04)',
         transition: 'box-shadow 0.15s ease',
       }}
     >
-      {/* Left accent stripe */}
       <div style={{ width: 4, flexShrink: 0, background: cfg.stripe }} />
-
-      {/* Content */}
-      <div style={{
-        flex: 1, padding: '14px 16px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      }}>
-        {/* Name + dept */}
+      <div style={{ flex: 1, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: '-0.02em' }}>
-              {univ.name}
-            </span>
-            <span style={{ fontSize: 16, color: T.textMuted, fontWeight: 500 }}>
-              {univ.dept}
-            </span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: '-0.02em' }}>{univ.name}</span>
+            <span style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>{univ.dept}</span>
           </div>
+          <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 3 }}>{univ.type} · {univ.process}</div>
         </div>
-
-        {/* Right: cut scores + badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 14, color: T.textSubtle, fontWeight: 500, marginBottom: 2 }}>70%컷</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{univ.cut70.toFixed(2)}</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 14, color: T.textSubtle, fontWeight: 500, marginBottom: 2 }}>50%컷</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{univ.cut50.toFixed(2)}</div>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: T.textSubtle, fontWeight: 500, marginBottom: 2 }}>입결등급</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{univ.grade.toFixed(2)}</div>
           </div>
-
-          {/* Badge */}
-          <div style={{
-            padding: '4px 10px', borderRadius: 6,
-            background: cfg.bg, color: cfg.color,
-            fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em',
-          }}>
+          <div style={{ padding: '4px 10px', borderRadius: 6, background: cfg.bg, color: cfg.color, fontSize: 14, fontWeight: 700 }}>
             {univ.badge}
           </div>
         </div>
@@ -173,7 +137,14 @@ export function Service1Grade() {
     '2': {},
     '3': {},
   });
-  const [showResults] = useState(true); // Show mock results by default
+  const [keyword, setKeyword] = useState('');
+  const [admType, setAdmType] = useState<'all' | '교과' | '종합'>('all');
+  const [results, setResults] = useState<University[]>([]);
+  const [counts, setCounts] = useState({ 도전: 0, 적정: 0, 안정: 0 });
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
 
   const handleGradeChange = (year: YearKey, subject: string, value: string) => {
     setGrades(prev => ({
@@ -182,11 +153,46 @@ export function Service1Grade() {
     }));
   };
 
-  const badgeCounts = {
-    도전: MOCK_UNIVERSITIES.filter(u => u.badge === '도전').length,
-    적정: MOCK_UNIVERSITIES.filter(u => u.badge === '적정').length,
-    안정: MOCK_UNIVERSITIES.filter(u => u.badge === '안정').length,
-  };
+  const calcAvg = useCallback(() => {
+    const all: number[] = [];
+    (['1', '2', '3'] as YearKey[]).forEach(y => {
+      Object.values(grades[y]).forEach(v => {
+        if (v) all.push(parseInt(v));
+      });
+    });
+    if (all.length === 0) return null;
+    return all.reduce((a, b) => a + b, 0) / all.length;
+  }, [grades]);
+
+  const handleSearch = useCallback(async () => {
+    const avg = calcAvg();
+    if (!avg) {
+      setError('최소 한 과목의 등급을 입력해주세요.');
+      return;
+    }
+    setLoading(true); setError(null); setSearched(true);
+    try {
+      const params = new URLSearchParams({
+        grade: avg.toFixed(2),
+        keyword,
+        type: admType,
+        limit: '60',
+      });
+      const res = await fetch(`/api/universities?${params}`);
+      if (!res.ok) throw new Error('검색 실패');
+      const data = await res.json();
+      setResults(data.results);
+      setCounts(data.counts);
+      setTotal(data.total);
+    } catch {
+      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [calcAvg, keyword, admType]);
+
+  const avg = calcAvg();
+  const badgeCounts = searched ? counts : { 도전: 0, 적정: 0, 안정: 0 };
 
   return (
     <div style={{ fontFamily: FONT, color: T.text, display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -292,32 +298,71 @@ export function Service1Grade() {
           </table>
         </div>
 
-        {/* CTA button */}
-        <div style={{ padding: '0 20px 20px' }}>
+        {/* Filters + CTA */}
+        <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* 키워드 + 전형 필터 */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="대학명 또는 학과 검색 (선택)"
+              value={keyword}
+              onChange={e => setKeyword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              style={{
+                flex: 1, minWidth: 160, padding: '8px 12px',
+                fontSize: 14, fontFamily: FONT, color: T.text,
+                background: T.bg, border: `1px solid ${T.border}`,
+                borderRadius: 8, outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden' }}>
+              {(['all', '교과', '종합'] as const).map(t => (
+                <button key={t} onClick={() => setAdmType(t)}
+                  style={{
+                    padding: '8px 14px', fontSize: 13, fontFamily: FONT, fontWeight: 600,
+                    border: 'none', cursor: 'pointer',
+                    background: admType === t ? T.primary : 'transparent',
+                    color: admType === t ? '#fff' : T.textMuted,
+                    transition: 'background 0.12s',
+                  }}>
+                  {t === 'all' ? '전체' : t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {avg && (
+            <div style={{ fontSize: 13, color: T.textSubtle }}>
+              입력 평균등급: <strong style={{ color: T.primary }}>{avg.toFixed(2)}등급</strong>
+            </div>
+          )}
+
+          {error && <div style={{ fontSize: 13, color: '#dc2626' }}>{error}</div>}
+
           <button
+            onClick={handleSearch}
+            disabled={loading}
             style={{
               width: '100%', padding: '14px 0',
-              background: T.primary, color: '#fff',
+              background: loading ? T.borderStrong : T.primary, color: '#fff',
               fontSize: 15, fontWeight: 700, fontFamily: FONT,
-              border: 'none', borderRadius: 10, cursor: 'pointer',
-              letterSpacing: '-0.02em',
-              transition: 'opacity 0.12s',
+              border: 'none', borderRadius: 10,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              letterSpacing: '-0.02em', transition: 'opacity 0.12s',
             }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
           >
-            대학 찾기
+            {loading ? '검색 중...' : '대학 찾기'}
           </button>
         </div>
       </div>
 
       {/* Results section */}
-      {showResults && (
+      {searched && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Results header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ fontSize: 'clamp(15px, 1.4vw, 18px)', fontWeight: 700, color: T.text, letterSpacing: '-0.03em', fontFamily: FONT }}>
               적정 대학 목록
+              {total > 60 && <span style={{ fontSize: 13, fontWeight: 400, color: T.textSubtle, marginLeft: 8 }}>전체 {total}개 중 60개 표시</span>}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <SummaryBadge label="도전" count={badgeCounts.도전} badge="도전" />
@@ -326,24 +371,22 @@ export function Service1Grade() {
             </div>
           </div>
 
-          {/* Column labels */}
-          <div style={{
-            display: 'flex', justifyContent: 'flex-end', gap: 16,
-            paddingRight: 60, paddingLeft: 16,
-          }}>
-            <span style={{ fontSize: 14, color: T.textSubtle, fontWeight: 500, width: 42, textAlign: 'center' }}>70%컷</span>
-            <span style={{ fontSize: 14, color: T.textSubtle, fontWeight: 500, width: 42, textAlign: 'center' }}>50%컷</span>
-          </div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: T.textSubtle, fontSize: 15 }}>검색 중...</div>
+          ) : results.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: T.textSubtle, fontSize: 15 }}>
+              조건에 맞는 대학이 없습니다. 등급 범위를 조정해보세요.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
+              {results.map((univ, i) => (
+                <UniversityCard key={`${univ.name}-${univ.dept}-${i}`} univ={univ} />
+              ))}
+            </div>
+          )}
 
-          {/* University cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
-            {MOCK_UNIVERSITIES.map(univ => (
-              <UniversityCard key={`${univ.name}-${univ.dept}`} univ={univ} />
-            ))}
-          </div>
-
-          <p style={{ fontSize: 15, color: T.textSubtle, textAlign: 'center', margin: 0 }}>
-            * 표시된 데이터는 예시이며, 실제 입시 결과와 다를 수 있습니다.
+          <p style={{ fontSize: 13, color: T.textSubtle, textAlign: 'center', margin: 0 }}>
+            * 2025학년도 어디가 입결 데이터 기준. 실제 입시 결과와 다를 수 있습니다.
           </p>
         </div>
       )}

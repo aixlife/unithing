@@ -357,30 +357,28 @@ export function Service2Subject() {
           </div>
 
           {/* Major header + view toggle */}
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5"><GraduationCap className="w-32 h-32" /></div>
-            <div className="relative z-10 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider">
-                    <CheckCircle2 className="w-3 h-3" /><span>권장 선택과목 안내</span>
-                  </div>
-                  <h2 className="text-3xl sm:text-4xl font-black text-slate-900">{selectedMajor.name}</h2>
-                </div>
-                <div className="flex bg-slate-100 p-1 rounded-xl self-start">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm relative">
+            <div className="absolute top-0 right-0 p-8 opacity-5 overflow-hidden pointer-events-none rounded-3xl inset-0"><GraduationCap className="w-32 h-32 absolute top-0 right-0 m-6" /></div>
+            <div className="relative z-10 space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider">
+                <CheckCircle2 className="w-3 h-3 shrink-0" /><span>권장 선택과목 안내</span>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 break-keep min-w-0">{selectedMajor.name}</h2>
+                <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 self-start sm:self-auto">
                   {([
                     { key: 'subject' as const, icon: <Layers className="w-4 h-4" />, label: '교과군별' },
                     { key: 'group' as const, icon: <Calendar className="w-4 h-4" />, label: '선택그룹' },
-                    { key: 'plan' as const, icon: <FileText className="w-4 h-4" />, label: '수강신청 계획서' },
+                    { key: 'plan' as const, icon: <FileText className="w-4 h-4" />, label: '계획서' },
                   ]).map(v => (
                     <button key={v.key} onClick={() => setViewMode(v.key)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === v.key ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${viewMode === v.key ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                       {v.icon}{v.label}
                     </button>
                   ))}
                 </div>
               </div>
-              <p className="text-slate-500 font-medium">{selectedMajor.name} 전공을 희망하는 학생을 위한 맞춤형 과목 가이드입니다.</p>
+              <p className="text-slate-500 font-medium text-sm">{selectedMajor.name} 전공을 희망하는 학생을 위한 맞춤형 과목 가이드입니다.</p>
             </div>
           </div>
 
@@ -388,46 +386,57 @@ export function Service2Subject() {
           {universityTips.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="bg-slate-900 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <GraduationCap className="text-white w-5 h-5" />
-                  <h3 className="text-white font-bold">2028학년도 대학별 권장과목 가이드 (출처: 학과바이블-캠퍼스멘토)</h3>
+              <div className="bg-slate-900 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                  <GraduationCap className="text-white w-5 h-5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-white font-bold text-sm leading-tight truncate">
+                      2028학년도 대학별 권장과목 가이드
+                    </p>
+                    <p className="text-slate-400 text-xs mt-0.5">출처: 학과바이블-캠퍼스멘토</p>
+                  </div>
                 </div>
-                <div className="relative">
+                <div className="relative shrink-0">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input type="text" placeholder="대학명 또는 지역 검색..." value={univSearchTerm}
                     onChange={(e) => setUnivSearchTerm(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 text-white text-xs rounded-xl pl-9 pr-4 py-2 w-full sm:w-64 focus:ring-2 focus:ring-blue-500 outline-none" />
+                    className="bg-slate-800 border border-slate-700 text-white text-xs rounded-xl pl-9 pr-4 py-2 w-full sm:w-56 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-6 py-3 whitespace-nowrap">권역/지역</th>
-                      <th className="px-6 py-3 whitespace-nowrap">대학교</th>
-                      <th className="px-6 py-3 whitespace-nowrap">모집단위</th>
-                      <th className="px-6 py-3">핵심과목</th>
-                      <th className="px-6 py-3">권장과목</th>
+                      <th className="px-5 py-4 whitespace-nowrap text-[13px] font-bold text-slate-400 uppercase tracking-wider">권역/지역</th>
+                      <th className="px-5 py-4 whitespace-nowrap text-[13px] font-bold text-slate-400 uppercase tracking-wider">대학교</th>
+                      <th className="px-5 py-4 whitespace-nowrap text-[13px] font-bold text-slate-400 uppercase tracking-wider">모집단위</th>
+                      <th className="px-5 py-4 text-[13px] font-bold text-slate-400 uppercase tracking-wider">핵심과목</th>
+                      <th className="px-5 py-4 text-[13px] font-bold text-slate-400 uppercase tracking-wider">권장과목</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {universityTips.map((tip, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">{tip.region}</span>
-                            <span className="text-slate-600 font-medium">{tip.location}</span>
+                      <tr key={idx} className="hover:bg-blue-50/30 transition-colors align-top">
+                        <td className="px-5 py-5 whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#8B95A1', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{tip.region}</span>
+                            <span style={{ fontSize: 15, fontWeight: 500, color: '#4E5968', lineHeight: 1.5, letterSpacing: '-0.01em' }}>{tip.location}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 font-bold text-slate-900">{tip.university}</td>
-                        <td className="px-6 py-4 text-slate-500 text-xs">{tip.major}</td>
-                        <td className="px-6 py-4">
-                          {tip.core !== '-' ? <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg font-medium inline-block">{tip.core}</span> : <span className="text-slate-300">-</span>}
+                        <td className="px-5 py-5 whitespace-nowrap" style={{ fontSize: 16, fontWeight: 700, color: '#191F28', letterSpacing: '-0.02em' }}>{tip.university}</td>
+                        <td className="px-5 py-5 max-w-[130px]" style={{ fontSize: 15, color: '#4E5968', lineHeight: 1.6, letterSpacing: '-0.01em' }}>{tip.major}</td>
+                        <td className="px-5 py-5 max-w-[210px]">
+                          {tip.core !== '-'
+                            ? <span style={{ display: 'block', background: '#EBF2FF', color: '#1B64DA', padding: '8px 12px', borderRadius: 8, fontSize: 15, fontWeight: 500, lineHeight: 1.6, letterSpacing: '-0.01em' }}>{tip.core}</span>
+                            : <span className="text-slate-300">-</span>}
                         </td>
-                        <td className="px-6 py-4">
-                          {tip.recommended !== '-' && tip.recommended !== '' ? <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-medium inline-block">{tip.recommended}</span> : <span className="text-slate-300">-</span>}
-                          {tip.note && tip.note !== '-' && <p className="text-[10px] text-slate-400 italic mt-1">{tip.note}</p>}
+                        <td className="px-5 py-5 max-w-[230px]">
+                          {tip.recommended !== '-' && tip.recommended !== ''
+                            ? <span style={{ display: 'block', background: '#F4F6F8', color: '#4E5968', padding: '8px 12px', borderRadius: 8, fontSize: 15, fontWeight: 500, lineHeight: 1.6, letterSpacing: '-0.01em' }}>{tip.recommended}</span>
+                            : <span className="text-slate-300">-</span>}
+                          {tip.note && tip.note !== '-' && (
+                            <p style={{ fontSize: 13, color: '#8B95A1', lineHeight: 1.6, marginTop: 8, letterSpacing: '-0.01em' }}>{tip.note}</p>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -462,7 +471,7 @@ export function Service2Subject() {
                           <div key={subject} className="p-4 rounded-xl border border-slate-100 bg-white hover:shadow-md transition-shadow flex flex-col justify-between gap-3">
                             <div className="font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded-md inline-block self-start">{subject}</div>
                             <div className="flex items-center justify-between">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${typeColors[type] || typeColors['일반']}`}>{type} 선택</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-bold border ${typeColors[type] || typeColors['일반']}`}>{type} 선택</span>
                               <button className="text-slate-300 hover:text-blue-500 transition-colors"><Info className="w-4 h-4" /></button>
                             </div>
                           </div>
@@ -483,10 +492,10 @@ export function Service2Subject() {
                         <div className={`w-fit px-3 h-10 rounded-xl flex items-center justify-center font-bold whitespace-nowrap ${recommendedInGroup.length > 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{group.id}</div>
                         <div>
                           <h4 className={`font-bold ${recommendedInGroup.length > 0 ? 'text-blue-900' : 'text-slate-700'}`}>{group.description}</h4>
-                          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{group.semester}</p>
+                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{group.semester}</p>
                         </div>
                       </div>
-                      {recommendedInGroup.length > 0 && <div className="bg-blue-600 text-white text-[10px] font-black px-2 py-1 rounded-full">추천 과목 있음</div>}
+                      {recommendedInGroup.length > 0 && <div className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">추천 과목 있음</div>}
                     </div>
                     <div className="p-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -504,8 +513,8 @@ export function Service2Subject() {
                                 </div>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${isRecommended ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>{type} 선택</span>
-                                <span className="text-[9px] text-slate-400 font-bold">{subject.semesters.join(', ')}학기</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold border ${isRecommended ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>{type} 선택</span>
+                                <span className="text-xs text-slate-400 font-medium">{subject.semesters.join(', ')}학기</span>
                               </div>
                             </div>
                           );

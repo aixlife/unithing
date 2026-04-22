@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import { signIn } from 'next-auth/react';
 
 function GoogleIcon() {
   return (
@@ -60,17 +60,16 @@ export default function LoginPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Google — TODO: NextAuth 연동 */}
-          <Link href="/dashboard" style={{
+          <button onClick={() => signIn('google', { callbackUrl: '/dashboard' })} style={{
             height: 52, borderRadius: 10,
-            background: '#191F28', color: '#fff',
+            background: '#191F28', color: '#fff', border: 'none',
             fontSize: 15, fontWeight: 600,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.01em', cursor: 'pointer', width: '100%',
           }}>
             <GoogleIcon />
             Google로 시작하기
-          </Link>
+          </button>
 
           {/* Kakao */}
           <button style={{
