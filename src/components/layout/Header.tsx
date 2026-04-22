@@ -20,14 +20,25 @@ function UnithingLogo({ size = 28 }: { size?: number }) {
 }
 
 function StudentSelector() {
-  const { students, currentStudent, setCurrentStudent } = useStudent();
+  const { students, currentStudent, setCurrentStudent, deleteStudent } = useStudent();
   const [open, setOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirmDeleteId === id) {
+      await deleteStudent(id);
+      setConfirmDeleteId(null);
+    } else {
+      setConfirmDeleteId(id);
+    }
+  };
 
   return (
     <>
       <div style={{ position: 'relative' }}>
-        <button onClick={() => setOpen(o => !o)} style={{
+        <button onClick={() => { setOpen(o => !o); setConfirmDeleteId(null); }} style={{
           display: 'flex', alignItems: 'center', gap: 7,
           background: '#F4F6F8', border: '1px solid #E5E8EB', borderRadius: 8,
           padding: '6px 10px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#191F28',
@@ -46,24 +57,43 @@ function StudentSelector() {
           <div style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0,
             background: '#fff', border: '1px solid #E5E8EB', borderRadius: 12,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.10)', minWidth: 180, overflow: 'hidden', zIndex: 200,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.10)', minWidth: 200, overflow: 'hidden', zIndex: 200,
           }}>
             {students.length === 0 && (
               <p style={{ padding: '12px 14px', fontSize: 13, color: '#8B95A1', margin: 0 }}>등록된 학생 없음</p>
             )}
             {students.map((s: Student) => (
-              <button key={s.id} onClick={() => { setCurrentStudent(s); setOpen(false); }} style={{
-                display: 'block', width: '100%', textAlign: 'left',
-                padding: '10px 14px', fontSize: 13, fontWeight: 600,
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'center',
                 background: currentStudent?.id === s.id ? '#EEF4FF' : 'transparent',
-                color: currentStudent?.id === s.id ? '#1B64DA' : '#191F28',
-                border: 'none', cursor: 'pointer',
+                borderBottom: '1px solid #F4F6F8',
               }}>
-                {s.name}
-                <span style={{ fontSize: 11, color: '#8B95A1', marginLeft: 6, fontWeight: 400 }}>{s.grade}</span>
-              </button>
+                <button onClick={() => { setCurrentStudent(s); setOpen(false); setConfirmDeleteId(null); }} style={{
+                  flex: 1, textAlign: 'left',
+                  padding: '10px 14px', fontSize: 13, fontWeight: 600,
+                  background: 'transparent',
+                  color: currentStudent?.id === s.id ? '#1B64DA' : '#191F28',
+                  border: 'none', cursor: 'pointer',
+                }}>
+                  {s.name}
+                  <span style={{ fontSize: 11, color: '#8B95A1', marginLeft: 6, fontWeight: 400 }}>{s.grade}</span>
+                </button>
+                <button
+                  onClick={(e) => handleDelete(s.id, e)}
+                  title={confirmDeleteId === s.id ? '한 번 더 클릭하면 삭제' : '학생 삭제'}
+                  style={{
+                    padding: '4px 10px', border: 'none', cursor: 'pointer', background: 'transparent',
+                    color: confirmDeleteId === s.id ? '#DC2626' : '#B0B8C1',
+                    fontSize: confirmDeleteId === s.id ? 11 : 14,
+                    fontWeight: confirmDeleteId === s.id ? 700 : 400,
+                    flexShrink: 0,
+                  }}
+                >
+                  {confirmDeleteId === s.id ? '삭제?' : '✕'}
+                </button>
+              </div>
             ))}
-            <div style={{ borderTop: '1px solid #F4F6F8' }}>
+            <div>
               <button onClick={() => { setOpen(false); setShowModal(true); }} style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1B64DA',
