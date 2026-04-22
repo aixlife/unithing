@@ -102,6 +102,21 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 6px 20px rgba(0,0,0,0.22);
 }
 
+/* 심층 분석 리포트 마크다운 */
+.segibu-report { font-family: 'Pretendard Variable', Pretendard, sans-serif; color: var(--text); line-height: 1.75; }
+.segibu-report h1 { font-size: 22px; font-weight: 800; color: var(--text); margin: 0 0 12px; letter-spacing: -0.03em; }
+.segibu-report h2 { font-size: 17px; font-weight: 700; color: var(--primary); margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-soft); letter-spacing: -0.02em; }
+.segibu-report h3 { font-size: 15px; font-weight: 700; color: var(--text); margin: 16px 0 6px; }
+.segibu-report p { font-size: 14px; color: var(--text-muted); margin: 0 0 10px; }
+.segibu-report em { font-style: italic; color: var(--text-subtle); font-size: 13px; }
+.segibu-report strong { font-weight: 700; color: var(--text); }
+.segibu-report ul { padding-left: 18px; margin: 6px 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.segibu-report li { font-size: 14px; color: var(--text-muted); line-height: 1.65; }
+.segibu-report li::marker { color: var(--primary); }
+.segibu-report blockquote { margin: 10px 0; padding: 10px 14px; background: var(--primary-soft); border-left: 4px solid var(--primary); border-radius: 0 8px 8px 0; font-size: 13px; color: var(--text-muted); }
+.segibu-report hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.segibu-report code { background: var(--bg-alt); border-radius: 4px; padding: 1px 5px; font-size: 13px; color: var(--text); }
+
 /* 반응형 유틸리티 */
 @media (max-width: 768px) {
   .ut-sidebar { display: none !important; }
