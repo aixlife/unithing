@@ -125,9 +125,21 @@ function StudentSelector() {
 export function Header() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const userName = session?.user?.name ?? '';
   const userEmail = session?.user?.email ?? '';
   const userImage = session?.user?.image ?? '';
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   return (
     <header style={{
@@ -146,7 +158,7 @@ export function Header() {
       <nav style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <StudentSelector />
         <div style={{ width: 1, height: 16, background: '#E5E8EB' }} />
-        <div style={{ position: 'relative' }}>
+        <div ref={menuRef} style={{ position: 'relative' }}>
           <button onClick={() => setMenuOpen(o => !o)} style={{
             display: 'flex', alignItems: 'center', gap: 8,
             background: 'none', border: 'none', cursor: 'pointer', padding: 0,
