@@ -65,9 +65,20 @@ export async function GET(req: NextRequest) {
   const data = loadData();
 
   const filtered = data.filter(r => Math.abs(r.g - userGrade) <= range);
-  filtered.sort((a, b) => a.g - b.g);
 
-  const results: UnivResult[] = filtered.slice(0, limit).map(r => ({
+  // 도전/적정/안정 각 구간별로 균형 있게 샘플링
+  const challenge = filtered.filter(r => r.g - userGrade < -0.4).sort((a, b) => b.g - a.g); // 가장 가까운 도전부터
+  const fit       = filtered.filter(r => r.g - userGrade >= -0.4 && r.g - userGrade <= 0.5).sort((a, b) => Math.abs(a.g - userGrade) - Math.abs(b.g - userGrade));
+  const safe      = filtered.filter(r => r.g - userGrade > 0.5).sort((a, b) => a.g - b.g); // 가장 가까운 안정부터
+
+  const perZone = Math.floor(limit / 3);
+  const balanced = [
+    ...challenge.slice(0, perZone),
+    ...fit.slice(0, perZone),
+    ...safe.slice(0, limit - perZone * 2),
+  ];
+
+  const results: UnivResult[] = balanced.map(r => ({
     name: r.n,
     dept: r.d,
     process: r.p,

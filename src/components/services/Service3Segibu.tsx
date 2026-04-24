@@ -44,6 +44,15 @@ const STAGES = [
 ];
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
+// AI가 문자열 대신 객체를 반환할 경우 안전하게 문자열로 변환
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toStr(v: any): string {
+  if (typeof v === 'string') return v;
+  if (v == null) return '';
+  if (typeof v === 'object') return Object.values(v).filter(Boolean).join(' / ');
+  return String(v);
+}
+
 function fmtGrade(v: number | null) {
   return v == null ? '-' : v.toFixed(2);
 }
@@ -140,12 +149,17 @@ function GradeLineChart({ grades }: { grades: GradeMatrix }) {
   const colors = ['#1B64DA', '#D97706', '#059669', '#7C3AED', '#DC2626', '#374151'];
   const keys = ['국어', '수학', '영어', '사회', '과학', '전체'];
 
+  const allVals = data.flatMap(d => keys.map(k => d[k as keyof typeof d] as number | null)).filter((v): v is number => v != null);
+  const minGrade = allVals.length > 0 ? Math.max(1, Math.floor(Math.min(...allVals)) - 1) : 1;
+  const maxGrade = allVals.length > 0 ? Math.min(9, Math.ceil(Math.max(...allVals)) + 1) : 9;
+  const ticks = Array.from({ length: maxGrade - minGrade + 1 }, (_, i) => minGrade + i);
+
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 8, right: 16, left: -20, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
         <XAxis dataKey="sem" tick={{ fontSize: 12, fill: T.textMuted, fontFamily: FONT }} />
-        <YAxis reversed domain={[1, 9]} ticks={[1,2,3,4,5,6,7,8,9]} tick={{ fontSize: 11, fill: T.textMuted }} />
+        <YAxis reversed domain={[minGrade, maxGrade]} ticks={ticks} tick={{ fontSize: 11, fill: T.textMuted }} />
         <Tooltip
           formatter={(v) => (v != null && typeof v === 'number') ? `${v.toFixed(2)}등급` : '-'}
           contentStyle={{ fontFamily: FONT, fontSize: 13, borderRadius: 8, border: `1px solid ${T.border}` }}
@@ -674,7 +688,7 @@ export function Service3Segibu() {
 
       {/* 탭 */}
       <div style={{ display: 'flex', borderBottom: `2px solid ${T.border}`, gap: 0 }}>
-        {([['report', '심층 분석 리포트'], ['grades', '성적 분석'], ['activities', '활동 상세']] as const).map(([k, l]) => (
+        {([['report', '학생부 리포트'], ['grades', '성적 분석'], ['activities', '학생부 심층분석']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             padding: '10px 20px', fontSize: 15, fontWeight: tab === k ? 700 : 500,
             color: tab === k ? T.primary : T.textMuted,
@@ -702,9 +716,13 @@ export function Service3Segibu() {
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 12 }}>향후 전략 제언</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 6 }}>심화 탐구 제안</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>{r.futureStrategy.deepDive}</div>
+            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>
+              {toStr(r.futureStrategy.deepDive)}
+            </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.warning, marginBottom: 6 }}>연계 과목</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7 }}>{r.futureStrategy.subjects}</div>
+            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7 }}>
+              {toStr(r.futureStrategy.subjects)}
+            </div>
           </div>
         </div>
       )}
