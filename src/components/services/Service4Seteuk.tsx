@@ -1,355 +1,548 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 
 const T = {
   primary: '#1B64DA', primarySoft: '#EBF2FF', primaryBorder: '#CFDFFB',
   success: '#16A34A', successSoft: '#DCFCE7',
-  accent: '#F59E0B', accentSoft: '#FEF3C7',
+  accent: '#F59E0B', accentSoft: '#FEF3C7', accentBorder: '#FCD34D',
+  indigo: '#4F46E5', indigoSoft: '#EEF2FF', indigoBorder: '#C7D2FE',
+  emerald: '#059669', emeraldSoft: '#D1FAE5',
   bg: '#F4F6F8', bgAlt: '#EFF1F4',
   surface: '#FFFFFF', surfaceAlt: '#FAFBFC',
   border: '#E5E8EB', borderStrong: '#D1D6DB',
   text: '#191F28', textMuted: '#4E5968', textSubtle: '#8B95A1',
   error: '#DC2626', errorSoft: '#FEF2F2',
-  comp: {
-    academic: { color: '#1B64DA', soft: '#EBF2FF', border: '#CFDFFB' },
-    career:   { color: '#D97706', soft: '#FEF3C7', border: '#FCD89A' },
-    community:{ color: '#059669', soft: '#D1FAE5', border: '#A7F3D0' },
-  },
 } as const;
 
 const FONT = "'Pretendard Variable', Pretendard, sans-serif";
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Phase = 1 | 2 | 3 | 4 | 5 | 6;
 
-type TopicItem = { title: string; tags: string[]; fit: number };
-type PlanData = {
-  subject: string;
-  topic: string;
-  motivation: string;
-  method: string;
-  output: string;
-  competencies: string[];
-};
+interface TopicItem { title: string; description: string }
+interface MotivationItem { type: string; content: string }
+interface CompetencyItem { name: string; behavior: string }
+interface FollowUpItem { type: string; content: string }
+interface PlanStep { step: string; title: string; description: string }
+interface PlanItem {
+  category: string;
+  content?: string;
+  isStepByStep?: boolean;
+  steps?: PlanStep[];
+}
 
-const WIZARD_STEPS = [
-  { id: 1, label: '기본정보', sub: '학과·과목 선택' },
-  { id: 2, label: '주제추천', sub: 'AI 탐구 주제' },
-  { id: 3, label: '동기확인', sub: '선정 이유' },
-  { id: 4, label: '역량확인', sub: '연결 역량' },
-  { id: 5, label: '세특초안', sub: '문장 초안' },
-  { id: 6, label: '탐구계획서', sub: '최종 산출' },
+const PHASES = [
+  { id: 1, label: '기본 정보 입력' },
+  { id: 2, label: '탐구 주제 추천' },
+  { id: 3, label: '동기 확인' },
+  { id: 4, label: '핵심 역량 확인' },
+  { id: 5, label: '탐구 후속활동' },
+  { id: 6, label: '최종 결과 확인' },
 ] as const;
 
-// ─── Step progress bar ─────────────────────────────────────────────────────────
-function StepProgressBar({ current }: { current: Step }) {
-  return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '26px 28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.textMuted, letterSpacing: '-0.01em', marginBottom: 4, fontFamily: FONT }}>세특 도우미</div>
-          <div style={{ fontSize: 'clamp(16px, 1.5vw, 20px)', fontWeight: 800, color: T.text, letterSpacing: '-0.025em', fontFamily: FONT }}>단계 {current} / 6</div>
-        </div>
-        <div style={{ padding: '8px 14px', borderRadius: 8, background: T.bgAlt, color: T.textMuted, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', fontFamily: FONT }}>
-          예상 소요시간 약 {(6 - current) * 2}분
-        </div>
-      </div>
+const TIPS: Record<number, { expert: string; writing: string }> = {
+  1: {
+    expert: '희망 학과와 관련된 최근 이슈나 교과서의 \'심화 탐구\' 섹션을 참고해 보세요.',
+    writing: '학생의 평소 관심사가 어떻게 교과 활동으로 이어졌는지 보여주는 시작점입니다.',
+  },
+  2: {
+    expert: '너무 넓은 주제보다는 실생활의 구체적인 현상을 분석하는 주제가 좋은 평가를 받습니다.',
+    writing: '주제 명칭만으로도 탐구의 깊이와 방향성이 드러나도록 구체적으로 기술하세요.',
+  },
+  3: {
+    expert: '단순히 \'궁금해서\'보다는 \'수업 중 배운 ~개념을 확장하기 위해\'와 같은 학술적 동기가 좋습니다.',
+    writing: '자기주도적 학습 태도와 지적 호기심이 드러나도록 동기를 서술하는 것이 핵심입니다.',
+  },
+  4: {
+    expert: '선택한 역량이 탐구 과정에서 어떻게 발휘되었는지 구체적인 행동 지표로 보여줘야 합니다.',
+    writing: '역량의 명칭보다는 해당 역량을 증명할 수 있는 구체적인 활동 사례를 문장에 녹여내세요.',
+  },
+  5: {
+    expert: '탐구로 끝내지 않고 관련 도서를 찾아보거나 실험을 설계하는 등 \'확장성\'을 보여주세요.',
+    writing: '탐구 이후의 변화와 성장을 언급하여 학업에 대한 열정과 발전 가능성을 강조하세요.',
+  },
+};
 
-      <div style={{ position: 'relative', padding: '0 18px' }}>
-        <div style={{ position: 'absolute', top: 17, left: 18, right: 18, height: 2, background: T.bgAlt, borderRadius: 1 }} />
-        <div style={{ position: 'absolute', top: 17, left: 18, width: `${((current - 1) / 5) * 100}%`, height: 2, background: T.primary, borderRadius: 1 }} />
-        <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between' }}>
-          {WIZARD_STEPS.map((s) => {
-            const done = s.id < current;
-            const active = s.id === current;
-            return (
-              <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 110 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: active || done ? T.primary : T.surface,
-                  border: `1.5px solid ${active || done ? T.primary : T.borderStrong}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, color: active || done ? '#fff' : T.textSubtle, fontWeight: 700, fontFamily: FONT,
-                }}>
-                  {done ? (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M3 7l3 3 5-6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  ) : s.id}
-                </div>
-                <div style={{ marginTop: 10, fontSize: 16, fontWeight: active ? 700 : 500, color: active ? T.text : (done ? T.textMuted : T.textSubtle), letterSpacing: '-0.01em', fontFamily: FONT }}>{s.label}</div>
-                <div style={{ fontSize: 14, color: T.textSubtle, marginTop: 2, letterSpacing: '-0.01em', fontFamily: FONT }}>{s.sub}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+const LS_DATA = 'unithing_seteuk_data';
+const LS_PHASE = 'unithing_seteuk_phase';
+
+// ─── Input helpers ────────────────────────────────────────────────────────────
+function inputStyle(focused: boolean) {
+  return {
+    width: '100%', borderRadius: 10,
+    border: `1px solid ${focused ? T.primary : T.border}`,
+    padding: '12px 14px', fontSize: 16, color: T.text,
+    background: T.surface, fontFamily: FONT, outline: 'none', boxSizing: 'border-box' as const,
+  };
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: T.textMuted, marginBottom: 6, fontFamily: FONT }}>{children}</label>;
+}
+
+function SectionCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28, ...style }}>
+      {children}
     </div>
   );
 }
 
-// ─── Step 1: 기본 정보 입력 ────────────────────────────────────────────────────
-function Step1Info({
-  subject, setSubject, major, setMajor, onNext, loading,
-}: {
-  subject: string;
-  setSubject: (v: string) => void;
-  major: string;
-  setMajor: (v: string) => void;
-  onNext: () => void;
-  loading: boolean;
-}) {
-  const canNext = subject.trim().length > 0 && major.trim().length > 0;
+function LoadingCard({ message }: { message: string }) {
   return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28 }}>
-      <h2 style={{ fontSize: 'clamp(16px, 1.5vw, 20px)', fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '0 0 4px', fontFamily: FONT }}>기본 정보 입력</h2>
-      <p style={{ fontSize: 17, color: T.textMuted, margin: '0 0 24px', letterSpacing: '-0.01em', fontFamily: FONT }}>탐구할 과목과 희망 학과를 입력해주세요.</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: T.textMuted, marginBottom: 6, fontFamily: FONT }}>과목명</label>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="예: 생명과학Ⅱ"
-            style={{ width: '100%', borderRadius: 10, border: `1px solid ${T.border}`, padding: '12px 14px', fontSize: 17, color: T.text, background: T.surface, fontFamily: FONT, outline: 'none', boxSizing: 'border-box' }}
-            onFocus={(e) => (e.target.style.borderColor = T.primary)}
-            onBlur={(e) => (e.target.style.borderColor = T.border)}
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: T.textMuted, marginBottom: 6, fontFamily: FONT }}>희망 학과</label>
-          <input
-            type="text"
-            value={major}
-            onChange={(e) => setMajor(e.target.value)}
-            placeholder="예: 의예과"
-            style={{ width: '100%', borderRadius: 10, border: `1px solid ${T.border}`, padding: '12px 14px', fontSize: 17, color: T.text, background: T.surface, fontFamily: FONT, outline: 'none', boxSizing: 'border-box' }}
-            onFocus={(e) => (e.target.style.borderColor = T.primary)}
-            onBlur={(e) => (e.target.style.borderColor = T.border)}
-          />
-        </div>
+    <SectionCard>
+      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+        <div style={{ fontSize: 36, marginBottom: 14 }}>⏳</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: T.text, fontFamily: FONT, marginBottom: 6 }}>AI가 분석 중...</div>
+        <div style={{ fontSize: 15, color: T.textMuted, fontFamily: FONT }}>{message}</div>
       </div>
-      <div style={{ marginTop: 20 }}>
-        <button
-          onClick={onNext}
-          disabled={!canNext || loading}
-          style={{
-            width: '100%', height: 48, borderRadius: 10,
-            background: canNext && !loading ? T.primary : T.bgAlt,
-            color: canNext && !loading ? '#fff' : T.textSubtle,
-            border: 'none', fontSize: 17, fontWeight: 700, cursor: canNext && !loading ? 'pointer' : 'not-allowed',
-            fontFamily: FONT, letterSpacing: '-0.01em', transition: 'all 0.15s',
-          }}
-        >
-          {loading ? 'AI 주제 추천 중...' : '다음'}
-        </button>
-      </div>
-    </div>
+    </SectionCard>
   );
 }
 
-// ─── Step 2: AI 주제 추천 ─────────────────────────────────────────────────────
-function Step2Topics({
-  topics, loading, error, chosenTopic, onChoose, onNext,
-}: {
-  topics: TopicItem[];
-  loading: boolean;
-  error: string | null;
-  chosenTopic: string;
-  onChoose: (title: string) => void;
-  onNext: (title: string) => void;
-}) {
-  const [customTopic, setCustomTopic] = useState('');
-  const [useCustom, setUseCustom] = useState(false);
-  const effectiveTopic = useCustom ? customTopic : chosenTopic;
-
-  if (loading) {
-    return (
-      <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28, textAlign: 'center' }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: FONT, marginBottom: 8 }}>AI가 탐구 주제를 추천하는 중...</div>
-        <div style={{ fontSize: 16, color: T.textMuted, fontFamily: FONT }}>10~20초 정도 소요될 수 있어요.</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ background: T.errorSoft, borderRadius: 16, border: `1px solid ${T.error}`, padding: 28, textAlign: 'center' }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: T.error, fontFamily: FONT }}>{error}</div>
-      </div>
-    );
-  }
-
+function RefreshBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28 }}>
-      <h2 style={{ fontSize: 'clamp(16px, 1.5vw, 20px)', fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '0 0 4px', fontFamily: FONT }}>AI 추천 탐구 주제</h2>
-      <p style={{ fontSize: 17, color: T.textMuted, margin: '0 0 20px', letterSpacing: '-0.01em', fontFamily: FONT }}>입력하신 정보를 바탕으로 생성한 맞춤 주제예요. 하나를 선택하거나 직접 입력하세요.</p>
+    <button
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '6px 12px', borderRadius: 8,
+        background: T.indigoSoft, border: `1px solid ${T.indigoBorder}`,
+        color: T.indigo, fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+        fontFamily: FONT, opacity: loading ? 0.6 : 1,
+      }}
+    >
+      <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none' }}>↻</span>
+      새로운 추천받기
+    </button>
+  );
+}
 
-      {!useCustom && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          {topics.map((topic, i) => {
-            const isChosen = topic.title === chosenTopic;
-            return (
-              <div key={i} onClick={() => onChoose(topic.title)} style={{
-                padding: '18px 20px', borderRadius: 12, cursor: 'pointer',
-                background: isChosen ? T.primarySoft : T.surfaceAlt,
-                border: `1.5px solid ${isChosen ? T.primary : T.border}`,
-                transition: 'all 0.15s',
+// ─── Progress Sidebar ─────────────────────────────────────────────────────────
+function Sidebar({ phase, onReset }: { phase: Phase; onReset: () => void }) {
+  return (
+    <div style={{
+      width: 220, flexShrink: 0,
+      background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`,
+      padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 0,
+    }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONT }}>세특 도우미</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', fontFamily: FONT }}>단계 {phase} / 6</div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+        {PHASES.map((p) => {
+          const done = phase > p.id;
+          const active = phase === p.id;
+          return (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px', borderRadius: 8,
+              background: active ? T.indigoSoft : 'transparent',
+            }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                background: active ? T.indigo : done ? T.emerald : T.bgAlt,
+                border: `1.5px solid ${active ? T.indigo : done ? T.emerald : T.borderStrong}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, color: (active || done) ? '#fff' : T.textSubtle, fontWeight: 700, fontFamily: FONT,
               }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.02em', lineHeight: 1.4, marginBottom: 10, fontFamily: FONT }}>{topic.title}</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {topic.tags.map((tag, j) => (
-                        <span key={j} style={{ padding: '2px 8px', fontSize: 14, borderRadius: 4, background: T.bgAlt, color: T.textMuted, fontWeight: 600, fontFamily: FONT }}>{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: isChosen ? T.primary : T.textMuted, letterSpacing: '-0.03em', lineHeight: 1, fontFamily: FONT }}>
-                      {topic.fit}<span style={{ fontSize: 11, fontWeight: 600, color: T.textSubtle, marginLeft: 1 }}>%</span>
-                    </div>
-                    <div style={{ fontSize: 13, color: T.textSubtle, fontWeight: 500, fontFamily: FONT }}>적합도</div>
-                  </div>
-                </div>
+                {done ? '✓' : p.id}
               </div>
-            );
-          })}
-        </div>
-      )}
+              <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? T.indigo : (done ? T.textMuted : T.textSubtle), fontFamily: FONT, lineHeight: 1.3 }}>
+                {p.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
 
       <button
-        onClick={() => setUseCustom((v) => !v)}
-        style={{ background: 'none', border: 'none', color: T.primary, fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: FONT, padding: '4px 0', marginBottom: 12, textDecoration: 'underline' }}
+        onClick={onReset}
+        style={{
+          marginTop: 20, padding: '10px', borderRadius: 10,
+          background: T.errorSoft, border: `1px solid #FCA5A5`,
+          color: T.error, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}
       >
-        {useCustom ? '추천 주제에서 선택하기' : '주제를 직접 입력하기'}
+        ↺ 처음부터 다시하기
       </button>
+    </div>
+  );
+}
 
-      {useCustom && (
-        <textarea
-          value={customTopic}
-          onChange={(e) => setCustomTopic(e.target.value)}
-          placeholder="탐구하고 싶은 주제를 직접 입력해주세요."
-          rows={3}
-          style={{ width: '100%', borderRadius: 10, border: `1px solid ${T.border}`, padding: '12px 14px', fontSize: 17, color: T.text, background: T.surface, resize: 'vertical', fontFamily: FONT, lineHeight: 1.7, outline: 'none', boxSizing: 'border-box', marginBottom: 16 }}
-          onFocus={(e) => (e.target.style.borderColor = T.primary)}
-          onBlur={(e) => (e.target.style.borderColor = T.border)}
-        />
-      )}
+// ─── Tips section ─────────────────────────────────────────────────────────────
+function TipsSection({ phase }: { phase: Phase }) {
+  if (phase >= 6) return null;
+  const tip = TIPS[phase];
+  if (!tip) return null;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+      <div style={{ background: T.accentSoft, border: `1px solid ${T.accentBorder}`, borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 10 }}>
+        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>💡</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E', marginBottom: 4, fontFamily: FONT }}>진로쌤의 Tip!</div>
+          <p style={{ fontSize: 12, color: '#78350F', margin: 0, lineHeight: 1.6, fontFamily: FONT }}>{tip.expert}</p>
+        </div>
+      </div>
+      <div style={{ background: T.indigoSoft, border: `1px solid ${T.indigoBorder}`, borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 10 }}>
+        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>✨</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#312E81', marginBottom: 4, fontFamily: FONT }}>좋은 세특 작성을 위한 Tip</div>
+          <p style={{ fontSize: 12, color: '#3730A3', margin: 0, lineHeight: 1.6, fontFamily: FONT }}>{tip.writing}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Phase 1: 기본 정보 ───────────────────────────────────────────────────────
+function Phase1({
+  major, setMajor, interest, setInterest, activities, setActivities,
+  onNext, loading,
+}: {
+  major: string; setMajor: (v: string) => void;
+  interest: string; setInterest: (v: string) => void;
+  activities: string; setActivities: (v: string) => void;
+  onNext: () => void; loading: boolean;
+}) {
+  const [focuses, setFocuses] = useState({ major: false, interest: false, activities: false });
+  const canNext = major.trim().length > 0 && interest.trim().length > 0;
+
+  return (
+    <SectionCard>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: '0 0 4px', fontFamily: FONT }}>기본 정보 입력</h2>
+      <p style={{ fontSize: 15, color: T.textMuted, margin: '0 0 24px', fontFamily: FONT }}>희망 학과와 관심 있는 주제를 입력해 주세요.</p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <Label>희망 학과</Label>
+          <input
+            type="text" value={major} onChange={(e) => setMajor(e.target.value)}
+            placeholder="예: 컴퓨터공학과, 생명과학과 등"
+            style={inputStyle(focuses.major)}
+            onFocus={() => setFocuses(f => ({ ...f, major: true }))}
+            onBlur={() => setFocuses(f => ({ ...f, major: false }))}
+          />
+        </div>
+        <div>
+          <Label>평소 탐구하고자 하는 주제나 호기심</Label>
+          <textarea
+            value={interest} onChange={(e) => setInterest(e.target.value)}
+            placeholder="예: 인공지능의 윤리적 문제, 유전자 가위 기술의 발전 등"
+            rows={3}
+            style={{ ...inputStyle(focuses.interest), resize: 'vertical' }}
+            onFocus={() => setFocuses(f => ({ ...f, interest: true }))}
+            onBlur={() => setFocuses(f => ({ ...f, interest: false }))}
+          />
+        </div>
+        <div>
+          <Label>기존에 해본 관련된 활동 (선택 사항)</Label>
+          <textarea
+            value={activities} onChange={(e) => setActivities(e.target.value)}
+            placeholder="예: 수학 시간에 배운 미분 개념을 활용한 물리 문제 해결 등"
+            rows={3}
+            style={{ ...inputStyle(focuses.activities), resize: 'vertical' }}
+            onFocus={() => setFocuses(f => ({ ...f, activities: true }))}
+            onBlur={() => setFocuses(f => ({ ...f, activities: false }))}
+          />
+        </div>
+      </div>
 
       <button
-        onClick={() => { if (effectiveTopic.trim()) onNext(effectiveTopic.trim()); }}
-        disabled={!effectiveTopic.trim()}
+        onClick={onNext} disabled={!canNext || loading}
+        style={{
+          width: '100%', height: 48, borderRadius: 10, marginTop: 24,
+          background: canNext && !loading ? T.indigo : T.bgAlt,
+          color: canNext && !loading ? '#fff' : T.textSubtle,
+          border: 'none', fontSize: 16, fontWeight: 700,
+          cursor: canNext && !loading ? 'pointer' : 'not-allowed', fontFamily: FONT,
+        }}
+      >
+        {loading ? 'AI 주제 추천 중...' : '다음 단계로'}
+      </button>
+    </SectionCard>
+  );
+}
+
+// ─── Phase 2: 탐구 주제 ───────────────────────────────────────────────────────
+function Phase2({
+  topics, loading, selectedTopic, setSelectedTopic, onRefresh, onNext,
+}: {
+  topics: TopicItem[]; loading: boolean;
+  selectedTopic: string; setSelectedTopic: (v: string) => void;
+  onRefresh: () => void; onNext: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  if (loading) return <LoadingCard message="10~20초 정도 소요될 수 있어요." />;
+
+  return (
+    <SectionCard>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>탐구 주제 추천</h2>
+          <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>추천된 주제 중 하나를 선택하거나 직접 입력하세요.</p>
+        </div>
+        <RefreshBtn onClick={onRefresh} loading={loading} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+        {topics.map((topic, i) => {
+          const chosen = selectedTopic === topic.title;
+          return (
+            <div key={i} onClick={() => setSelectedTopic(topic.title)} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+              background: chosen ? T.indigoSoft : T.surfaceAlt,
+              border: `2px solid ${chosen ? T.indigo : T.border}`,
+              transition: 'all 0.15s',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: chosen ? T.indigo : T.text, letterSpacing: '-0.01em', marginBottom: 6, fontFamily: FONT }}>{topic.title}</div>
+                  <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{topic.description}</div>
+                </div>
+                {chosen && <span style={{ fontSize: 18, color: T.indigo, flexShrink: 0 }}>✓</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, marginBottom: 20 }}>
+        <Label>직접 수정하거나 확정된 주제</Label>
+        <input
+          type="text" value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)}
+          placeholder="위 추천 주제를 클릭하거나 직접 입력하세요."
+          style={inputStyle(focused)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </div>
+
+      <button
+        onClick={onNext} disabled={!selectedTopic.trim()}
         style={{
           width: '100%', height: 48, borderRadius: 10,
-          background: effectiveTopic.trim() ? T.primary : T.bgAlt,
-          color: effectiveTopic.trim() ? '#fff' : T.textSubtle,
-          border: 'none', fontSize: 15, fontWeight: 700,
-          cursor: effectiveTopic.trim() ? 'pointer' : 'not-allowed',
-          fontFamily: FONT, letterSpacing: '-0.01em',
+          background: selectedTopic.trim() ? T.indigo : T.bgAlt,
+          color: selectedTopic.trim() ? '#fff' : T.textSubtle,
+          border: 'none', fontSize: 16, fontWeight: 700,
+          cursor: selectedTopic.trim() ? 'pointer' : 'not-allowed', fontFamily: FONT,
         }}
       >
         이 주제로 시작하기
       </button>
-    </div>
+    </SectionCard>
   );
 }
 
-// ─── Step 3: 탐구 동기 ────────────────────────────────────────────────────────
-function Step3Motivation({ motivation, setMotivation }: { motivation: string; setMotivation: (v: string) => void }) {
+// ─── Phase 3: 탐구 동기 ───────────────────────────────────────────────────────
+function Phase3({
+  motivations, loading, selectedMotivation, setSelectedMotivation, onRefresh,
+}: {
+  motivations: MotivationItem[]; loading: boolean;
+  selectedMotivation: string; setSelectedMotivation: (v: string) => void;
+  onRefresh: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  if (loading) return <LoadingCard message="동기를 분석 중이에요..." />;
+
   return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28 }}>
-      <h2 style={{ fontSize: 'clamp(16px, 1.5vw, 20px)', fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '0 0 4px', fontFamily: FONT }}>탐구 동기 확인</h2>
-      <p style={{ fontSize: 17, color: T.textMuted, margin: '0 0 20px', letterSpacing: '-0.01em', fontFamily: FONT }}>이 주제를 선택한 이유를 적어주세요.</p>
-      <textarea
-        value={motivation}
-        onChange={(e) => setMotivation(e.target.value)}
-        placeholder="COVID-19 경험을 통해 백신 주권의 중요성을 느꼈고..."
-        rows={4}
-        style={{ width: '100%', borderRadius: 10, border: `1px solid ${T.border}`, padding: '12px 14px', fontSize: 17, color: T.text, background: T.surface, resize: 'vertical', fontFamily: FONT, lineHeight: 1.7, outline: 'none', boxSizing: 'border-box' }}
-        onFocus={(e) => (e.target.style.borderColor = T.primary)}
-        onBlur={(e) => (e.target.style.borderColor = T.border)}
-      />
-    </div>
+    <SectionCard>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>동기 확인</h2>
+          <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>탐구 활동의 시작이 될 동기를 선택해 주세요.</p>
+        </div>
+        <RefreshBtn onClick={onRefresh} loading={loading} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+        {motivations.map((mot, i) => {
+          const chosen = selectedMotivation === mot.content;
+          return (
+            <div key={i} onClick={() => setSelectedMotivation(mot.content)} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+              background: chosen ? T.indigoSoft : T.surfaceAlt,
+              border: `2px solid ${chosen ? T.indigo : T.border}`,
+              transition: 'all 0.15s',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4, background: T.indigoSoft, color: T.indigo, marginBottom: 8, fontFamily: FONT, letterSpacing: '0.03em' }}>
+                    {mot.type}
+                  </span>
+                  <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.65, fontFamily: FONT }}>{mot.content}</div>
+                </div>
+                {chosen && <span style={{ fontSize: 16, color: T.indigo, flexShrink: 0, marginTop: 2 }}>✓</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+        <Label>선택한 탐구 동기 수정</Label>
+        <textarea
+          value={selectedMotivation} onChange={(e) => setSelectedMotivation(e.target.value)}
+          placeholder="위 유형 중 하나를 선택하거나 내용을 다듬어 입력해 주세요."
+          rows={4}
+          style={{ ...inputStyle(focused), resize: 'vertical' }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </div>
+    </SectionCard>
   );
 }
 
-// ─── Step 4: 연결 역량 ────────────────────────────────────────────────────────
-function Step4Competencies({ competencies, setCompetencies }: { competencies: string; setCompetencies: (v: string) => void }) {
+// ─── Phase 4: 핵심 역량 ───────────────────────────────────────────────────────
+function Phase4({
+  competencies, loading, selectedCompetencies, onToggle, onRefresh,
+}: {
+  competencies: CompetencyItem[]; loading: boolean;
+  selectedCompetencies: string[];
+  onToggle: (key: string) => void;
+  onRefresh: () => void;
+}) {
+  if (loading) return <LoadingCard message="역량을 분석 중이에요..." />;
+
   return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28 }}>
-      <h2 style={{ fontSize: 'clamp(16px, 1.5vw, 20px)', fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '0 0 4px', fontFamily: FONT }}>연결 역량 확인</h2>
-      <p style={{ fontSize: 17, color: T.textMuted, margin: '0 0 20px', letterSpacing: '-0.01em', fontFamily: FONT }}>이 탐구가 어떤 역량과 연결되는지 생각해보세요.</p>
-      <textarea
-        value={competencies}
-        onChange={(e) => setCompetencies(e.target.value)}
-        placeholder="학업역량 — 논문 분석 및 비교 능력, 진로역량 — 의료 분야 관심..."
-        rows={4}
-        style={{ width: '100%', borderRadius: 10, border: `1px solid ${T.border}`, padding: '12px 14px', fontSize: 17, color: T.text, background: T.surface, resize: 'vertical', fontFamily: FONT, lineHeight: 1.7, outline: 'none', boxSizing: 'border-box' }}
-        onFocus={(e) => (e.target.style.borderColor = T.primary)}
-        onBlur={(e) => (e.target.style.borderColor = T.border)}
-      />
-    </div>
+    <SectionCard>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>핵심 역량 확인</h2>
+          <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>강조하고 싶은 역량을 모두 선택해 주세요. (복수 선택 가능)</p>
+        </div>
+        <RefreshBtn onClick={onRefresh} loading={loading} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+        {competencies.map((comp, i) => {
+          const key = `${comp.name}: ${comp.behavior}`;
+          const chosen = selectedCompetencies.includes(key);
+          return (
+            <div key={i} onClick={() => onToggle(key)} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+              background: chosen ? T.indigoSoft : T.surfaceAlt,
+              border: `2px solid ${chosen ? T.indigo : T.border}`,
+              transition: 'all 0.15s',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: chosen ? T.indigo : T.text, marginBottom: 6, fontFamily: FONT }}>{comp.name}</div>
+                  <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{comp.behavior}</div>
+                </div>
+                {chosen && <span style={{ fontSize: 18, color: T.indigo, flexShrink: 0 }}>✓</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {selectedCompetencies.length > 0 && (
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+          <Label>선택된 핵심 역량</Label>
+          <div style={{ padding: '12px 14px', borderRadius: 10, border: `1px solid ${T.border}`, background: T.surfaceAlt, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {selectedCompetencies.map((c, i) => (
+              <div key={i} style={{ fontSize: 14, color: T.text, fontFamily: FONT, lineHeight: 1.5 }}>• {c}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
-// ─── Step 5: 세특 초안 ────────────────────────────────────────────────────────
-function Step5Draft({
-  draft, onChange, loading, error, onRetry,
+// ─── Phase 5: 탐구 후속활동 ───────────────────────────────────────────────────
+function Phase5({
+  followUps, loading, selectedFollowUp, setSelectedFollowUp, onRefresh,
+}: {
+  followUps: FollowUpItem[]; loading: boolean;
+  selectedFollowUp: string; setSelectedFollowUp: (v: string) => void;
+  onRefresh: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  if (loading) return <LoadingCard message="후속활동을 추천 중이에요..." />;
+
+  return (
+    <SectionCard>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>탐구 후속활동</h2>
+          <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>탐구 이후 심화할 수 있는 후속 활동을 선택해 주세요.</p>
+        </div>
+        <RefreshBtn onClick={onRefresh} loading={loading} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+        {followUps.map((fu, i) => {
+          const chosen = selectedFollowUp === fu.content;
+          return (
+            <div key={i} onClick={() => setSelectedFollowUp(fu.content)} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+              background: chosen ? T.indigoSoft : T.surfaceAlt,
+              border: `2px solid ${chosen ? T.indigo : T.border}`,
+              transition: 'all 0.15s',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4, background: T.emeraldSoft, color: T.emerald, marginBottom: 8, fontFamily: FONT, letterSpacing: '0.03em' }}>
+                    {fu.type}
+                  </span>
+                  <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.65, fontFamily: FONT }}>{fu.content}</div>
+                </div>
+                {chosen && <span style={{ fontSize: 16, color: T.indigo, flexShrink: 0, marginTop: 2 }}>✓</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+        <Label>최종 선택한 후속 활동 수정</Label>
+        <textarea
+          value={selectedFollowUp} onChange={(e) => setSelectedFollowUp(e.target.value)}
+          placeholder="실행할 후속 활동 내용을 입력해 주세요."
+          rows={4}
+          style={{ ...inputStyle(focused), resize: 'vertical' }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─── Phase 6: 최종 결과 ───────────────────────────────────────────────────────
+function Phase6({
+  draft, plan, loading, error, onRetry,
 }: {
   draft: string;
-  onChange: (v: string) => void;
+  plan: { plan: PlanItem[] } | null;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
 }) {
-  if (loading) {
-    return (
-      <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28, textAlign: 'center' }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: FONT, marginBottom: 8 }}>AI가 세특을 작성 중...</div>
-        <div style={{ fontSize: 16, color: T.textMuted, fontFamily: FONT }}>10~20초 정도 소요될 수 있어요.</div>
-      </div>
-    );
-  }
+  const [copied, setCopied] = useState(false);
+
+  if (loading) return <LoadingCard message="세특 초안과 탐구 계획서를 생성 중이에요... 30초 정도 소요됩니다." />;
 
   if (error) {
     return (
-      <div style={{ background: T.errorSoft, borderRadius: 16, border: `1px solid ${T.error}`, padding: 28 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: T.error, fontFamily: FONT, marginBottom: 16 }}>{error}</div>
-        <button
-          onClick={onRetry}
-          style={{ padding: '10px 20px', borderRadius: 10, background: T.primary, color: '#fff', border: 'none', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}
-        >
+      <SectionCard style={{ background: T.errorSoft, border: `1px solid ${T.error}` }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.error, fontFamily: FONT, marginBottom: 16 }}>{error}</div>
+        <button onClick={onRetry} style={{ padding: '10px 20px', borderRadius: 10, background: T.primary, color: '#fff', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
           다시 시도
         </button>
-      </div>
+      </SectionCard>
     );
   }
 
-  return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28 }}>
-      <h2 style={{ fontSize: 'clamp(16px, 1.5vw, 20px)', fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '0 0 4px', fontFamily: FONT }}>세특 초안 작성</h2>
-      <p style={{ fontSize: 17, color: T.textMuted, margin: '0 0 20px', letterSpacing: '-0.01em', fontFamily: FONT }}>AI가 초안을 생성했어요. 직접 수정해보세요.</p>
-      <textarea
-        value={draft}
-        onChange={(e) => onChange(e.target.value)}
-        rows={8}
-        style={{ width: '100%', borderRadius: 10, border: `1px solid ${T.border}`, padding: '12px 14px', fontSize: 17, color: T.text, background: T.surface, resize: 'vertical', fontFamily: FONT, lineHeight: 1.7, outline: 'none', boxSizing: 'border-box' }}
-        onFocus={(e) => (e.target.style.borderColor = T.primary)}
-        onBlur={(e) => (e.target.style.borderColor = T.border)}
-      />
-      <div style={{ fontSize: 14, color: T.textSubtle, marginTop: 8, textAlign: 'right', letterSpacing: '-0.01em', fontFamily: FONT }}>
-        {draft.length}자 · 생기부 500자 권장 이내
-      </div>
-    </div>
-  );
-}
-
-// ─── Step 6: 최종 출력 ────────────────────────────────────────────────────────
-function Step6Final({ draft, plan, onReset }: { draft: string; plan: PlanData | null; onReset: () => void }) {
-  const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(draft).then(() => {
       setCopied(true);
@@ -358,267 +551,378 @@ function Step6Final({ draft, plan, onReset }: { draft: string; plan: PlanData | 
   };
 
   return (
-    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22 }}>
+    <SectionCard>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <span style={{ padding: '3px 9px', fontSize: 15, borderRadius: 5, background: T.successSoft, color: T.success, fontWeight: 700, fontFamily: FONT }}>완성</span>
-          <h2 style={{ fontSize: 'clamp(19px, 2vw, 24px)', fontWeight: 800, color: T.text, letterSpacing: '-0.035em', margin: '10px 0 4px', lineHeight: 1.2, fontFamily: FONT }}>세특 초안 & 탐구 계획서</h2>
-          {plan && (
-            <p style={{ fontSize: 17, color: T.textMuted, margin: 0, letterSpacing: '-0.01em', fontFamily: FONT }}>주제 · {plan.topic}</p>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button onClick={handleCopy} style={{ padding: '8px 14px', borderRadius: 8, background: copied ? T.successSoft : T.bgAlt, color: copied ? T.success : T.text, border: `1px solid ${copied ? T.success : T.borderStrong}`, fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
-            {copied ? '✓ 복사됨' : '복사'}
-          </button>
+          <span style={{ padding: '3px 9px', fontSize: 13, borderRadius: 5, background: '#D1FAE5', color: T.success, fontWeight: 700, fontFamily: FONT }}>완성</span>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '10px 0 0', fontFamily: FONT }}>최종 결과 확인</h2>
+          <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>완성된 세특 초안과 탐구 계획서입니다.</p>
         </div>
       </div>
 
-      <div style={{ marginBottom: 26 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: T.textMuted, letterSpacing: '-0.01em', margin: '0 0 10px', fontFamily: FONT }}>세특 문장 초안</h3>
-        <div style={{ padding: 22, borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}`, fontSize: 18, color: T.text, lineHeight: 1.95, letterSpacing: '-0.01em', fontFamily: FONT }}>
-          {draft || '세특 초안이 없습니다.'}
+      {/* Research Plan */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: `2px solid ${T.indigo}`, paddingBottom: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 18 }}>📋</span>
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, fontFamily: FONT }}>탐구 계획서</h3>
         </div>
-        <div style={{ fontSize: 14, color: T.textSubtle, marginTop: 8, textAlign: 'right', letterSpacing: '-0.01em', fontFamily: FONT }}>
-          총 {draft.length}자 · 생기부 500자 권장 이내
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: T.textMuted, letterSpacing: '-0.01em', margin: '0 0 10px', fontFamily: FONT }}>탐구 계획서</h3>
         {plan ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', fontSize: 17 }}>
-            <tbody>
-              {[
-                ['탐구 주제', plan.topic],
-                ['연관 교과', plan.subject],
-                ['탐구 동기', plan.motivation],
-                ['탐구 방법', plan.method],
-                ['예상 결과물', plan.output],
-                ['연계 역량', '__COMP__'],
-              ].map((row, i) => (
-                <tr key={i} style={{ borderTop: i === 0 ? 'none' : `1px solid ${T.border}` }}>
-                  <td style={{ padding: '14px 18px', background: T.surfaceAlt, fontWeight: 700, color: T.text, width: 140, letterSpacing: '-0.01em', fontFamily: FONT }}>{row[0]}</td>
-                  <td style={{ padding: '14px 18px', color: T.text, lineHeight: 1.6, letterSpacing: '-0.01em', fontFamily: FONT }}>
-                    {row[1] === '__COMP__' ? (
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {plan.competencies.map((comp, j) => {
-                          const palette = [T.comp.academic, T.comp.career, T.comp.community];
-                          const cc = palette[j % palette.length];
-                          return (
-                            <span key={j} style={{ padding: '3px 10px', fontSize: 15, borderRadius: 5, background: cc.soft, color: cc.color, fontWeight: 700, fontFamily: FONT }}>{comp}</span>
-                          );
-                        })}
-                      </div>
-                    ) : row[1]}
-                  </td>
+          <div style={{ border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: T.surfaceAlt, borderBottom: `1px solid ${T.border}` }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: T.textMuted, width: '25%', fontFamily: FONT }}>구분</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: T.textMuted, fontFamily: FONT }}>내용</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {plan.plan.map((item, i) => (
+                  <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: '14px 16px', background: '#EEF2FF', fontWeight: 700, color: '#3730A3', verticalAlign: 'top', whiteSpace: 'pre-line', fontFamily: FONT }}>{item.category}</td>
+                    <td style={{ padding: '14px 16px', color: T.text, lineHeight: 1.65, fontFamily: FONT }}>
+                      {item.isStepByStep && item.steps ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 0' }}>
+                          {item.steps.map((s, j) => (
+                            <div key={j} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                              <div style={{
+                                background: T.indigo, color: '#fff', fontSize: 10, fontWeight: 700,
+                                padding: '3px 6px', borderRadius: 4, flexShrink: 0, marginTop: 2, fontFamily: FONT,
+                              }}>
+                                {s.step}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3, fontFamily: FONT }}>{s.title}</div>
+                                <div style={{ fontSize: 13, color: T.textMuted, fontFamily: FONT }}>{s.description}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ whiteSpace: 'pre-wrap' }}>{item.content}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div style={{ padding: 20, borderRadius: 12, background: T.bgAlt, color: T.textSubtle, fontSize: 16, fontFamily: FONT, textAlign: 'center' }}>계획서 데이터 없음</div>
+          <div style={{ padding: 20, borderRadius: 12, background: T.bgAlt, color: T.textSubtle, fontSize: 15, fontFamily: FONT, textAlign: 'center' }}>계획서 데이터 없음</div>
         )}
       </div>
 
-      <button onClick={onReset} style={{ padding: '10px 20px', borderRadius: 10, background: T.bgAlt, color: T.textMuted, border: `1px solid ${T.border}`, fontSize: 16, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
-        처음부터 다시
-      </button>
-    </div>
+      {/* SeTeuk Draft */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `2px solid ${T.emerald}`, paddingBottom: 10, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>✨</span>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, fontFamily: FONT }}>세특 초안 (교사 관점)</h3>
+          </div>
+          <button onClick={handleCopy} style={{
+            padding: '8px 14px', borderRadius: 8,
+            background: copied ? '#D1FAE5' : T.bgAlt,
+            color: copied ? T.success : T.text,
+            border: `1px solid ${copied ? T.success : T.borderStrong}`,
+            fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+          }}>
+            {copied ? '✓ 복사됨' : '세특 초안 복사'}
+          </button>
+        </div>
+        <div style={{ background: '#F0FDF4', border: `1px solid #BBF7D0`, borderRadius: 12, padding: '20px 22px', fontSize: 15, color: T.text, lineHeight: 1.9, fontFamily: FONT, fontStyle: 'italic' }}>
+          {draft || '세특 초안이 없습니다.'}
+        </div>
+        <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 8, textAlign: 'right', fontFamily: FONT }}>
+          총 {draft.length}자
+        </div>
+      </div>
+    </SectionCard>
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 export function Service4Seteuk() {
   const { currentStudent } = useStudent();
-  const [step, setStep] = useState<Step>(1);
+  const [phase, setPhase] = useState<Phase>(1);
 
-  // Step 1 inputs
-  const [subject, setSubject] = useState('');
-  const [major, setMajor] = useState(currentStudent?.target_dept ?? '');
+  const [major, setMajor] = useState('');
+  const [interest, setInterest] = useState('');
+  const [activities, setActivities] = useState('');
 
-  // Step 2 state
   const [topics, setTopics] = useState<TopicItem[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
-  const [topicsError, setTopicsError] = useState<string | null>(null);
-  const [chosenTopic, setChosenTopic] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState('');
 
-  // Step 3 & 4 inputs
-  const [motivation, setMotivation] = useState('');
-  const [competencies, setCompetencies] = useState('');
+  const [motivations, setMotivations] = useState<MotivationItem[]>([]);
+  const [motivationsLoading, setMotivationsLoading] = useState(false);
+  const [selectedMotivation, setSelectedMotivation] = useState('');
 
-  // Step 5 & 6 state
-  const [seteukDraft, setSeteukDraft] = useState('');
-  const [plan, setPlan] = useState<PlanData | null>(null);
-  const [draftLoading, setDraftLoading] = useState(false);
-  const [draftError, setDraftError] = useState<string | null>(null);
+  const [competencies, setCompetencies] = useState<CompetencyItem[]>([]);
+  const [competenciesLoading, setCompetenciesLoading] = useState(false);
+  const [selectedCompetencies, setSelectedCompetencies] = useState<string[]>([]);
 
-  const next = () => setStep((s) => Math.min(s + 1, 6) as Step);
-  const prev = () => setStep((s) => Math.max(s - 1, 1) as Step);
-  const reset = () => {
-    setStep(1);
-    setSubject('');
-    setMajor(currentStudent?.target_dept ?? '');
-    setTopics([]);
-    setTopicsError(null);
-    setChosenTopic('');
-    setMotivation('');
-    setCompetencies('');
-    setSeteukDraft('');
-    setPlan(null);
-    setDraftError(null);
-  };
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [followUpsLoading, setFollowUpsLoading] = useState(false);
+  const [selectedFollowUp, setSelectedFollowUp] = useState('');
 
-  const fetchTopics = async (subjectVal: string, majorVal: string) => {
-    setTopicsLoading(true);
-    setTopicsError(null);
-    setTopics([]);
-    try {
-      const res = await fetch(`/api/analyze/seteuk?subject=${encodeURIComponent(subjectVal)}&major=${encodeURIComponent(majorVal)}`);
-      if (!res.ok) throw new Error('서버 오류');
-      const data: TopicItem[] = await res.json();
-      setTopics(data);
-      if (data.length > 0) setChosenTopic(data[0].title);
-    } catch {
-      setTopicsError('주제 추천 실패. 다시 시도해주세요.');
-    } finally {
-      setTopicsLoading(false);
+  const [draft, setDraft] = useState('');
+  const [plan, setPlan] = useState<{ plan: PlanItem[] } | null>(null);
+  const [finalLoading, setFinalLoading] = useState(false);
+  const [finalError, setFinalError] = useState<string | null>(null);
+
+  // Load from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(LS_DATA);
+    const savedPhase = localStorage.getItem(LS_PHASE);
+    if (saved) {
+      try {
+        const d = JSON.parse(saved);
+        if (d.major) setMajor(d.major);
+        if (d.interest) setInterest(d.interest);
+        if (d.activities) setActivities(d.activities);
+        if (d.topics) setTopics(d.topics);
+        if (d.selectedTopic) setSelectedTopic(d.selectedTopic);
+        if (d.motivations) setMotivations(d.motivations);
+        if (d.selectedMotivation) setSelectedMotivation(d.selectedMotivation);
+        if (d.competencies) setCompetencies(d.competencies);
+        if (d.selectedCompetencies) setSelectedCompetencies(d.selectedCompetencies);
+        if (d.followUps) setFollowUps(d.followUps);
+        if (d.selectedFollowUp) setSelectedFollowUp(d.selectedFollowUp);
+        if (d.draft) setDraft(d.draft);
+        if (d.plan) setPlan(d.plan);
+      } catch { /* ignore */ }
     }
+    if (savedPhase) setPhase(parseInt(savedPhase) as Phase);
+    // fallback to student context for major
+    if (!saved && currentStudent?.target_dept) setMajor(currentStudent.target_dept);
+  }, [currentStudent?.target_dept]);
+
+  // Save to localStorage
+  useEffect(() => {
+    localStorage.setItem(LS_DATA, JSON.stringify({
+      major, interest, activities,
+      topics, selectedTopic,
+      motivations, selectedMotivation,
+      competencies, selectedCompetencies,
+      followUps, selectedFollowUp,
+      draft, plan,
+    }));
+    localStorage.setItem(LS_PHASE, phase.toString());
+  }, [major, interest, activities, topics, selectedTopic, motivations, selectedMotivation, competencies, selectedCompetencies, followUps, selectedFollowUp, draft, plan, phase]);
+
+  const toggleCompetency = (key: string) => {
+    setSelectedCompetencies(prev =>
+      prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]
+    );
   };
 
-  const fetchDraft = async () => {
-    setDraftLoading(true);
-    setDraftError(null);
+  async function fetchTopics(majorVal: string, interestVal: string, activitiesVal: string) {
+    setTopicsLoading(true);
+    try {
+      const res = await fetch(`/api/analyze/seteuk?action=topics&major=${encodeURIComponent(majorVal)}&interest=${encodeURIComponent(interestVal)}&activities=${encodeURIComponent(activitiesVal)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setTopics(data.topics ?? []);
+    } catch { /* stay on loading=false */ }
+    finally { setTopicsLoading(false); }
+  }
+
+  async function fetchMotivations(topic: string) {
+    setMotivationsLoading(true);
+    try {
+      const res = await fetch(`/api/analyze/seteuk?action=motivations&topic=${encodeURIComponent(topic)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setMotivations(data.motivations ?? []);
+      setSelectedMotivation('');
+    } catch { /* noop */ }
+    finally { setMotivationsLoading(false); }
+  }
+
+  async function fetchCompetencies(topic: string) {
+    setCompetenciesLoading(true);
+    try {
+      const res = await fetch(`/api/analyze/seteuk?action=competencies&topic=${encodeURIComponent(topic)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setCompetencies(data.competencies ?? []);
+      setSelectedCompetencies([]);
+    } catch { /* noop */ }
+    finally { setCompetenciesLoading(false); }
+  }
+
+  async function fetchFollowUps(topic: string) {
+    setFollowUpsLoading(true);
+    try {
+      const res = await fetch(`/api/analyze/seteuk?action=followups&topic=${encodeURIComponent(topic)}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setFollowUps(data.followUps ?? []);
+      setSelectedFollowUp('');
+    } catch { /* noop */ }
+    finally { setFollowUpsLoading(false); }
+  }
+
+  async function fetchFinal() {
+    setFinalLoading(true);
+    setFinalError(null);
     try {
       const res = await fetch('/api/analyze/seteuk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, major, topic: chosenTopic, motivation, competencies }),
+        body: JSON.stringify({
+          major, interest, topic: selectedTopic,
+          motivation: selectedMotivation,
+          competencies: selectedCompetencies,
+          followUp: selectedFollowUp,
+        }),
       });
       if (!res.ok) throw new Error('서버 오류');
-      const data: { draft: string; plan: PlanData } = await res.json();
-      setSeteukDraft(data.draft);
-      setPlan(data.plan);
+      const data = await res.json();
+      setDraft(data.draft ?? '');
+      setPlan(data.plan ?? null);
     } catch {
-      setDraftError('세특 생성 실패. 다시 시도해주세요.');
+      setFinalError('세특 생성 실패. 다시 시도해주세요.');
     } finally {
-      setDraftLoading(false);
+      setFinalLoading(false);
+    }
+  }
+
+  const handleNext = async () => {
+    if (phase === 1) {
+      if (topics.length === 0) await fetchTopics(major, interest, activities);
+      setPhase(2);
+    } else if (phase === 2) {
+      if (motivations.length === 0) await fetchMotivations(selectedTopic);
+      setPhase(3);
+    } else if (phase === 3) {
+      if (competencies.length === 0) await fetchCompetencies(selectedTopic);
+      setPhase(4);
+    } else if (phase === 4) {
+      if (followUps.length === 0) await fetchFollowUps(selectedTopic);
+      setPhase(5);
+    } else if (phase === 5) {
+      setPhase(6);
+      await fetchFinal();
     }
   };
 
-  // Step 1 → Step 2 버튼
-  const handleStep1Next = async () => {
-    await fetchTopics(subject, major);
-    next();
+  const handleBack = () => {
+    if (phase > 1) setPhase((p) => (p - 1) as Phase);
   };
 
-  // Step 4 → Step 5 버튼
-  const handleStep4Next = async () => {
-    next();
-    await fetchDraft();
-  };
-
-  const canStep3Next = motivation.trim().length > 0;
-  const canStep4Next = competencies.trim().length > 0;
-
-  const renderStep = () => {
-    if (step === 1) {
-      return (
-        <Step1Info
-          subject={subject}
-          setSubject={setSubject}
-          major={major}
-          setMajor={setMajor}
-          onNext={handleStep1Next}
-          loading={topicsLoading}
-        />
-      );
-    }
-    if (step === 2) {
-      return (
-        <Step2Topics
-          topics={topics}
-          loading={topicsLoading}
-          error={topicsError}
-          chosenTopic={chosenTopic}
-          onChoose={setChosenTopic}
-          onNext={(t) => { setChosenTopic(t); next(); }}
-        />
-      );
-    }
-    if (step === 3) {
-      return <Step3Motivation motivation={motivation} setMotivation={setMotivation} />;
-    }
-    if (step === 4) {
-      return <Step4Competencies competencies={competencies} setCompetencies={setCompetencies} />;
-    }
-    if (step === 5) {
-      return (
-        <Step5Draft
-          draft={seteukDraft}
-          onChange={setSeteukDraft}
-          loading={draftLoading}
-          error={draftError}
-          onRetry={fetchDraft}
-        />
-      );
-    }
-    if (step === 6) {
-      return <Step6Final draft={seteukDraft} plan={plan} onReset={reset} />;
-    }
-    return null;
-  };
-
-  // 하단 버튼 표시 여부 및 동작
-  const showBottomNav = step !== 1 && step !== 2 && step !== 6 && !(step === 5 && (draftLoading || !!draftError));
-
-  const getNextLabel = () => {
-    if (step === 4) return draftLoading ? '생성 중...' : 'AI 세특 생성하기';
-    return '다음';
-  };
-
-  const handleNext = () => {
-    if (step === 4) { handleStep4Next(); return; }
-    next();
+  const handleReset = () => {
+    if (!confirm('모든 내용이 초기화됩니다. 계속하시겠습니까?')) return;
+    setPhase(1);
+    setMajor(currentStudent?.target_dept ?? '');
+    setInterest(''); setActivities('');
+    setTopics([]); setSelectedTopic('');
+    setMotivations([]); setSelectedMotivation('');
+    setCompetencies([]); setSelectedCompetencies([]);
+    setFollowUps([]); setSelectedFollowUp('');
+    setDraft(''); setPlan(null); setFinalError(null);
+    localStorage.removeItem(LS_DATA);
+    localStorage.removeItem(LS_PHASE);
   };
 
   const canNext = () => {
-    if (step === 3) return canStep3Next;
-    if (step === 4) return canStep4Next && !draftLoading;
-    return true;
+    if (phase === 1) return major.trim().length > 0 && interest.trim().length > 0 && !topicsLoading;
+    if (phase === 2) return selectedTopic.trim().length > 0;
+    if (phase === 3) return selectedMotivation.trim().length > 0;
+    if (phase === 4) return selectedCompetencies.length > 0;
+    if (phase === 5) return selectedFollowUp.trim().length > 0;
+    return false;
   };
 
-  return (
-    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <StepProgressBar current={step} />
-      {renderStep()}
+  const isAnyLoading = topicsLoading || motivationsLoading || competenciesLoading || followUpsLoading;
 
-      {showBottomNav && (
-        <div style={{ display: 'flex', gap: 10 }}>
-          {step > 1 && (
-            <button
-              onClick={prev}
-              style={{ height: 44, padding: '0 24px', borderRadius: 10, background: T.bgAlt, color: T.textMuted, border: `1px solid ${T.border}`, fontSize: 17, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}
-            >
-              이전
+  return (
+    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      <Sidebar phase={phase} onReset={handleReset} />
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {phase === 1 && (
+          <Phase1
+            major={major} setMajor={setMajor}
+            interest={interest} setInterest={setInterest}
+            activities={activities} setActivities={setActivities}
+            onNext={handleNext} loading={topicsLoading}
+          />
+        )}
+        {phase === 2 && (
+          <Phase2
+            topics={topics} loading={topicsLoading}
+            selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic}
+            onRefresh={() => fetchTopics(major, interest, activities)}
+            onNext={handleNext}
+          />
+        )}
+        {phase === 3 && (
+          <Phase3
+            motivations={motivations} loading={motivationsLoading}
+            selectedMotivation={selectedMotivation} setSelectedMotivation={setSelectedMotivation}
+            onRefresh={() => fetchMotivations(selectedTopic)}
+          />
+        )}
+        {phase === 4 && (
+          <Phase4
+            competencies={competencies} loading={competenciesLoading}
+            selectedCompetencies={selectedCompetencies}
+            onToggle={toggleCompetency}
+            onRefresh={() => fetchCompetencies(selectedTopic)}
+          />
+        )}
+        {phase === 5 && (
+          <Phase5
+            followUps={followUps} loading={followUpsLoading}
+            selectedFollowUp={selectedFollowUp} setSelectedFollowUp={setSelectedFollowUp}
+            onRefresh={() => fetchFollowUps(selectedTopic)}
+          />
+        )}
+        {phase === 6 && (
+          <Phase6
+            draft={draft} plan={plan}
+            loading={finalLoading} error={finalError}
+            onRetry={fetchFinal}
+          />
+        )}
+
+        {/* Bottom navigation (phases 3,4,5) */}
+        {phase >= 3 && phase <= 5 && !isAnyLoading && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button onClick={handleBack} style={{
+              height: 48, padding: '0 24px', borderRadius: 10,
+              background: T.bgAlt, color: T.textMuted, border: `1px solid ${T.border}`,
+              fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+            }}>
+              이전 단계
             </button>
-          )}
-          <button
-            onClick={handleNext}
-            disabled={!canNext()}
-            style={{
-              flex: 1, height: 44, borderRadius: 10,
-              background: canNext() ? T.primary : T.bgAlt,
+            <button onClick={handleNext} disabled={!canNext()} style={{
+              flex: 1, height: 48, borderRadius: 10,
+              background: canNext() ? T.indigo : T.bgAlt,
               color: canNext() ? '#fff' : T.textSubtle,
-              border: 'none', fontSize: 17, fontWeight: 700,
-              cursor: canNext() ? 'pointer' : 'not-allowed',
-              fontFamily: FONT, transition: 'all 0.15s',
-            }}
-          >
-            {getNextLabel()}
+              border: 'none', fontSize: 16, fontWeight: 700,
+              cursor: canNext() ? 'pointer' : 'not-allowed', fontFamily: FONT,
+            }}>
+              {phase === 5 ? 'AI 최종 생성하기' : '다음 단계로'}
+            </button>
+          </div>
+        )}
+
+        {/* Back button on phase 2 */}
+        {phase === 2 && (
+          <button onClick={handleBack} style={{
+            height: 44, padding: '0 24px', borderRadius: 10, marginTop: 16,
+            background: T.bgAlt, color: T.textMuted, border: `1px solid ${T.border}`,
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: FONT, alignSelf: 'flex-start',
+          }}>
+            이전 단계
           </button>
-        </div>
-      )}
+        )}
+
+        <TipsSection phase={phase} />
+      </div>
     </div>
   );
 }
