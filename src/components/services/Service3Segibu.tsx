@@ -36,7 +36,7 @@ const COMP_COLOR = {
 
 // ── 분석 단계 라벨 ────────────────────────────────────────────────────────────
 const STAGES = [
-  { until: 25, label: 'PDF 파일을 읽는 중...' },
+  { until: 25, label: '생기부 내용을 읽는 중...' },
   { until: 55, label: 'AI가 생기부 내용을 파악하는 중...' },
   { until: 78, label: '역량 점수 및 성적 분석 중...' },
   { until: 92, label: '심층 리포트 생성 중...' },
@@ -476,41 +476,90 @@ function LoadingScreen({ fileName }: { fileName?: string }) {
 // ── 업로드 화면 ───────────────────────────────────────────────────────────────
 function UploadScreen({ currentStudentName, onAnalyze, error }: {
   currentStudentName?: string;
-  onAnalyze: (file: File) => void;
+  onAnalyze: (input: File | string) => void;
   error: string | null;
 }) {
+  const [mode, setMode] = useState<'pdf' | 'text'>('pdf');
   const [file, setFile] = useState<File | null>(null);
+  const [text, setText] = useState('');
   const [drag, setDrag] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
+  const canSubmit = mode === 'pdf' ? !!file : text.trim().length > 100;
+
   return (
-    <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 560, margin: '40px auto' }}>
+    <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 580, margin: '40px auto' }}>
       <div style={{ fontSize: 20, fontWeight: 800, color: T.text, marginBottom: 4 }}>생기부 AI 심층 분석</div>
       <div style={{ fontSize: 15, color: T.textMuted, marginBottom: 20 }}>
-        {currentStudentName ? `${currentStudentName} 학생의 ` : ''}생기부 PDF를 업로드하면 역량·성적·활동을 종합 분석해드려요.
+        {currentStudentName ? `${currentStudentName} 학생의 ` : ''}생기부를 분석하여 역량·성적·활동을 종합 분석해드려요.
       </div>
-      <div
-        onClick={() => ref.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f?.type === 'application/pdf') setFile(f); }}
-        style={{ border: `2px dashed ${drag ? T.primary : T.borderStrong}`, borderRadius: 12, padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', background: drag ? T.primarySoft : T.bgAlt, transition: 'all 0.15s' }}
-      >
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke={T.textSubtle} strokeWidth="1.8" fill="none"/>
-          <polyline points="14 2 14 8 20 8" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round"/>
-          <line x1="12" y1="18" x2="12" y2="12" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round"/>
-          <polyline points="9 15 12 12 15 15" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.textMuted }}>{file ? file.name : '생기부 PDF를 끌어다 놓거나 클릭해 선택'}</div>
-        <div style={{ fontSize: 13, color: T.textSubtle }}>최대 20MB · PDF만 가능</div>
+
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', background: T.bgAlt, borderRadius: 10, padding: 3, gap: 2, marginBottom: 16 }}>
+        {([{ key: 'pdf', label: 'PDF 업로드' }, { key: 'text', label: '텍스트 붙여넣기' }] as const).map(m => (
+          <button
+            key={m.key}
+            onClick={() => setMode(m.key)}
+            style={{
+              flex: 1, padding: '9px 0', borderRadius: 7, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: 'none', fontFamily: FONT,
+              background: mode === m.key ? T.surface : 'transparent',
+              color: mode === m.key ? T.primary : T.textMuted,
+              boxShadow: mode === m.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s',
+            }}
+          >{m.label}</button>
+        ))}
       </div>
-      <input ref={ref} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+
+      {mode === 'pdf' ? (
+        <>
+          <div
+            onClick={() => ref.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f?.type === 'application/pdf') setFile(f); }}
+            style={{ border: `2px dashed ${drag ? T.primary : T.borderStrong}`, borderRadius: 12, padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', background: drag ? T.primarySoft : T.bgAlt, transition: 'all 0.15s' }}
+          >
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke={T.textSubtle} strokeWidth="1.8" fill="none"/>
+              <polyline points="14 2 14 8 20 8" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round"/>
+              <line x1="12" y1="18" x2="12" y2="12" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round"/>
+              <polyline points="9 15 12 12 15 15" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div style={{ fontSize: 15, fontWeight: 600, color: T.textMuted }}>{file ? file.name : '생기부 PDF를 끌어다 놓거나 클릭해 선택'}</div>
+            <div style={{ fontSize: 13, color: T.textSubtle }}>최대 20MB · PDF만 가능</div>
+          </div>
+          <input ref={ref} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+        </>
+      ) : (
+        <div>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="나이스(NEIS)에서 복사한 생기부 전체 텍스트를 여기에 붙여넣으세요.&#10;&#10;성적, 창체, 세특, 행동특성 등 모든 내용을 포함할수록 정확한 분석이 가능합니다."
+            style={{
+              width: '100%', boxSizing: 'border-box', height: 200,
+              padding: '14px 16px', border: `1.5px solid ${T.border}`, borderRadius: 12,
+              fontSize: 14, fontFamily: FONT, color: T.text, lineHeight: 1.6,
+              resize: 'vertical', outline: 'none', background: T.bgAlt,
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = T.primary; }}
+            onBlur={e => { e.currentTarget.style.borderColor = T.border; }}
+          />
+          <div style={{ fontSize: 12, color: text.trim().length < 100 ? T.warning : T.success, marginTop: 5, fontWeight: 600 }}>
+            {text.trim().length}자 {text.trim().length < 100 ? '(최소 100자 이상 입력)' : '입력됨'}
+          </div>
+        </div>
+      )}
+
       {error && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: T.dangerSoft, color: T.danger, fontSize: 14 }}>{error}</div>}
       <button
-        onClick={() => file && onAnalyze(file)}
-        disabled={!file}
-        style={{ marginTop: 14, width: '100%', height: 48, borderRadius: 10, background: file ? T.primary : T.bgAlt, color: file ? '#fff' : T.textSubtle, border: 'none', fontSize: 16, fontWeight: 700, cursor: file ? 'pointer' : 'not-allowed', fontFamily: FONT }}
+        onClick={() => {
+          if (mode === 'pdf' && file) onAnalyze(file);
+          else if (mode === 'text' && text.trim()) onAnalyze(text.trim());
+        }}
+        disabled={!canSubmit}
+        style={{ marginTop: 14, width: '100%', height: 48, borderRadius: 10, background: canSubmit ? T.primary : T.bgAlt, color: canSubmit ? '#fff' : T.textSubtle, border: 'none', fontSize: 16, fontWeight: 700, cursor: canSubmit ? 'pointer' : 'not-allowed', fontFamily: FONT }}
       >
         AI 심층 분석 시작
       </button>
@@ -529,11 +578,11 @@ export function Service3Segibu() {
   const [showCriteria, setShowCriteria] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
-  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [lastFileName, setLastFileName] = useState<string | null>(null);
 
-  const handleAnalyze = useCallback((file: File) => {
-    setLastFile(file);
-    analyzeSegibu(file);
+  const handleAnalyze = useCallback((input: File | string) => {
+    setLastFileName(typeof input === 'string' ? '텍스트 입력' : input.name);
+    analyzeSegibu(input);
   }, [analyzeSegibu]);
 
   const handleReanalyze = () => {
@@ -566,7 +615,7 @@ export function Service3Segibu() {
     }
   };
 
-  if (analysisLoading) return <LoadingScreen fileName={lastFile?.name} />;
+  if (analysisLoading) return <LoadingScreen fileName={lastFileName ?? undefined} />;
   if (!segibuAnalysis) return <UploadScreen currentStudentName={currentStudent?.name} onAnalyze={handleAnalyze} error={analysisError} />;
 
   const r = segibuAnalysis;

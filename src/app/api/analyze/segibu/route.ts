@@ -94,40 +94,43 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    if (!file) return Response.json({ error: '파일이 없습니다' }, { status: 400 });
-
-    const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString('base64');
-
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = genAI.getGenerativeModel({
       model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
       systemInstruction: SYSTEM_INSTRUCTION,
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let parts: any[];
+    const contentType = req.headers.get('content-type') ?? '';
+
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      if (!body.text) return Response.json({ error: '텍스트가 없습니다' }, { status: 400 });
+      parts = [{ text: `[생기부 원문]\n${body.text}\n\n위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.` }];
+    } else {
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      if (!file) return Response.json({ error: '파일이 없습니다' }, { status: 400 });
+      const bytes = await file.arrayBuffer();
+      const base64 = Buffer.from(bytes).toString('base64');
+      parts = [
+        { inlineData: { mimeType: 'application/pdf', data: base64 } },
+        { text: '위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.' },
+      ];
+    }
+
     const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [
-          { inlineData: { mimeType: 'application/pdf', data: base64 } },
-          { text: '위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.' },
-        ],
-      }],
+      contents: [{ role: 'user', parts }],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any,
     });
 
     const raw = result.response.text().trim();
-
-    // 마크다운 리포트와 JSON 분리
     const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
     if (!jsonMatch) throw new Error('JSON 파싱 실패 — AI 응답 형식 오류');
 
     const jsonData = JSON.parse(jsonMatch[1].trim());
-
-    // 마크다운 리포트: JSON 블록 제거
     const report = raw.replace(/```json[\s\S]*?```/, '').trim();
 
     return Response.json({ ...jsonData, report });

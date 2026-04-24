@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import { toJpeg } from 'html-to-image';
 import {
   FIELD_DATA, SUBJECT_AREAS, SUBJECT_TYPES, SUNGSHIN_GROUPS, MANDATORY_SUBJECTS,
-  type Major, type Field, type SungshinSubject
+  type Major, type Field, type SungshinSubject, type SelectionGroup
 } from '@/data/curriculumData';
 import { UNIVERSITY_TIPS } from '@/data/universityData';
 import { SUBJECT_DETAILS } from '@/data/subjectDetails';
@@ -66,6 +66,26 @@ const IconCheck = () => (
     <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
+const IconGrid = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+  </svg>
+);
+const IconPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+const IconTrash = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+);
+const IconSettings = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
 const IconBook = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
@@ -86,8 +106,17 @@ export function Service2Subject() {
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'subject' | 'plan'>('subject');
+  const [viewMode, setViewMode] = useState<'subject' | 'group' | 'plan'>('subject');
   const [planGrade, setPlanGrade] = useState<2 | 3>(2);
+  // Custom curriculum
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [isCustomMode, setIsCustomMode] = useState(false);
+  const [customGroups, setCustomGroups] = useState<SelectionGroup[]>([]);
+  const [customMandatory, setCustomMandatory] = useState<Record<number, SungshinSubject[]>>({});
+  const [tempMandatory, setTempMandatory] = useState({ '2-1': '', '2-2': '', '3-1': '', '3-2': '' });
+  const [tempGroups, setTempGroups] = useState<{ id: number; grade: number; semester: string; credits: number; selectCount: number; subjects: string }[]>([
+    { id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }
+  ]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [univSearchTerm, setUnivSearchTerm] = useState('');
@@ -226,6 +255,30 @@ export function Service2Subject() {
       };
     });
   }, [selectedMajor, planGrade]);
+
+  const processSemester = (raw: string): SungshinSubject[] => {
+    return raw.split(',').map(s => s.trim()).filter(Boolean).map(name => ({ name, semesters: [1, 2] }));
+  };
+
+  const handleCustomDone = () => {
+    const mandatory: Record<number, SungshinSubject[]> = {
+      2: [...processSemester(tempMandatory['2-1']), ...processSemester(tempMandatory['2-2'])],
+      3: [...processSemester(tempMandatory['3-1']), ...processSemester(tempMandatory['3-2'])],
+    };
+    const groups: SelectionGroup[] = tempGroups.map((g, i) => ({
+      id: `선택군${i + 1}`,
+      grade: g.grade,
+      semester: g.semester,
+      selectCount: g.selectCount,
+      credits: g.credits,
+      subjects: g.subjects.split(',').map(s => s.trim()).filter(Boolean).map(name => ({ name, semesters: [1, 2] })),
+      description: '',
+    }));
+    setCustomMandatory(mandatory);
+    setCustomGroups(groups);
+    setIsCustomMode(true);
+    setShowCustomForm(false);
+  };
 
   // ---- RENDER ----
   return (
@@ -446,6 +499,7 @@ export function Service2Subject() {
               <div style={{ display: 'flex', background: T.bgAlt, borderRadius: 10, padding: 3, gap: 2 }}>
                 {([
                   { key: 'subject' as const, icon: <IconLayers />, label: '교과별' },
+                  { key: 'group' as const, icon: <IconGrid />, label: '선택군별' },
                   { key: 'plan' as const, icon: <IconCalendar />, label: '계획서' },
                 ] as const).map(v => (
                   <button
@@ -470,6 +524,29 @@ export function Service2Subject() {
                   </button>
                 ))}
               </div>
+
+              {/* Custom curriculum button */}
+              {(viewMode === 'group' || viewMode === 'plan') && (
+                <button
+                  onClick={() => setShowCustomForm(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 14px',
+                    background: isCustomMode ? T.accent : T.surface,
+                    color: isCustomMode ? '#fff' : T.textMuted,
+                    border: `1px solid ${isCustomMode ? T.accent : T.border}`,
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: FONT,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <IconSettings />
+                  {isCustomMode ? '내 교육과정' : '교육과정 입력'}
+                </button>
+              )}
 
               {/* PDF button */}
               {viewMode === 'plan' && (
@@ -717,6 +794,113 @@ export function Service2Subject() {
             </div>
           )}
 
+          {/* ===== group view ===== */}
+          {viewMode === 'group' && (() => {
+            const activeGroups = isCustomMode ? customGroups : SUNGSHIN_GROUPS;
+            const activeMandatory = isCustomMode ? customMandatory : MANDATORY_SUBJECTS;
+            const grades = [...new Set(activeGroups.map(g => g.grade))].sort();
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {!selectedMajor && (
+                  <div style={{ background: T.accentSoft, border: `1px solid ${T.accent}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#92400E' }}>
+                    학과를 선택하면 추천 과목이 강조 표시됩니다.
+                  </div>
+                )}
+
+                {isCustomMode && customGroups.length === 0 && (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: T.textSubtle }}>
+                    <p style={{ margin: '0 0 12px', fontSize: 14 }}>입력된 교육과정이 없습니다.</p>
+                    <button onClick={() => setShowCustomForm(true)} style={{ padding: '8px 16px', background: T.primary, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
+                      교육과정 입력하기
+                    </button>
+                  </div>
+                )}
+
+                {grades.map(grade => (
+                  <div key={grade}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ background: T.primary, color: '#fff', borderRadius: 6, padding: '2px 10px', fontSize: 13 }}>{grade}학년</span>
+                      <span style={{ fontSize: 13, color: T.textSubtle, fontWeight: 500 }}>선택과목 구성</span>
+                    </div>
+
+                    {/* Mandatory subjects */}
+                    {(activeMandatory[grade] || []).length > 0 && (
+                      <div style={{ background: T.primarySoft, border: `1px solid ${T.primaryBorder}`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 8 }}>필수과목</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {(activeMandatory[grade] || []).map(s => (
+                            <span key={s.name} style={{ fontSize: 13, fontWeight: 600, padding: '4px 10px', background: T.surface, border: `1px solid ${T.primaryBorder}`, borderRadius: 8, color: T.text }}>
+                              {s.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Selection groups */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+                      {activeGroups.filter(g => g.grade === grade).map(group => (
+                        <div key={group.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                          <div style={{ background: T.bg, padding: '10px 14px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{group.id}</span>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: T.primarySoft, color: T.primary, fontWeight: 700 }}>택{group.selectCount}</span>
+                              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: T.bgAlt, color: T.textMuted, fontWeight: 600 }}>{group.credits || 4}학점</span>
+                              {group.semester && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 100, background: T.bgAlt, color: T.textMuted, fontWeight: 600 }}>{group.semester}</span>}
+                            </div>
+                          </div>
+                          <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {group.subjects.map(subject => {
+                              const isRec = selectedMajor?.recommendedSubjects.some(s => normalizeSubjectName(s) === normalizeSubjectName(subject.name));
+                              const type = SUBJECT_TYPES[subject.name] || '일반';
+                              const accentColor = type === '진로' ? T.primary : type === '융합' ? '#7C3AED' : T.success;
+                              const accentSoft = type === '진로' ? T.primarySoft : type === '융합' ? '#EDE9FE' : T.successSoft;
+                              return (
+                                <div key={subject.name} style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                  padding: '7px 10px',
+                                  borderRadius: 8,
+                                  border: `1px solid ${isRec ? T.primary : T.border}`,
+                                  background: isRec ? T.primarySoft : T.surface,
+                                  cursor: 'pointer',
+                                  transition: 'border-color 0.1s',
+                                }}
+                                  onClick={() => setSelectedSubjectName(subject.name)}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    {isRec && (
+                                      <span style={{ color: T.primary, display: 'flex', flexShrink: 0 }}><IconCheck /></span>
+                                    )}
+                                    <span style={{ fontSize: 13, fontWeight: isRec ? 700 : 500, color: isRec ? T.primary : T.text }}>{subject.name}</span>
+                                  </div>
+                                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 100, background: accentSoft, color: accentColor, fontWeight: 700, flexShrink: 0 }}>{type}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Legend */}
+                {selectedMajor && (
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, color: T.textMuted, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 12, height: 12, background: T.primarySoft, border: `1.5px solid ${T.primary}`, borderRadius: 3 }} />
+                      <span>{selectedMajor.name} 추천 과목</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 12, height: 12, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 3 }} />
+                      <span>일반 과목</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* ===== plan view ===== */}
           {viewMode === 'plan' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -893,6 +1077,144 @@ export function Service2Subject() {
             <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.6 }}>
               <strong style={{ display: 'block', marginBottom: 3 }}>안내 사항</strong>
               <span>위 과목 리스트는 일반적인 권장 사항이며, 실제 학교의 교육과정 편성 현황에 따라 다를 수 있습니다. 대학별 핵심 권장 과목이 다를 수 있으니, 목표 대학의 입학처 홈페이지를 반드시 참고하시기 바랍니다.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Custom curriculum modal ===== */}
+      {showCustomForm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={() => setShowCustomForm(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(25,31,40,0.6)', backdropFilter: 'blur(4px)' }} />
+          <div style={{
+            position: 'relative',
+            background: T.surface,
+            width: '100%',
+            maxWidth: 640,
+            maxHeight: '90vh',
+            borderRadius: 20,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
+            fontFamily: FONT,
+          }}>
+            {/* Modal header */}
+            <div style={{ background: T.text, padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>우리 학교 교육과정 입력</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>과목명을 쉼표로 구분하여 입력하세요</div>
+              </div>
+              <button onClick={() => setShowCustomForm(false)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
+                <IconX />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Mandatory subjects */}
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 12 }}>필수과목 (학년·학기별)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {(['2-1', '2-2', '3-1', '3-2'] as const).map(key => (
+                    <div key={key}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: T.textMuted, marginBottom: 5 }}>
+                        {key.replace('-', '학년 ')}학기
+                      </label>
+                      <input
+                        type="text"
+                        value={tempMandatory[key]}
+                        onChange={e => setTempMandatory(prev => ({ ...prev, [key]: e.target.value }))}
+                        placeholder="예: 문학, 대수, 영어Ⅰ"
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, fontFamily: FONT, outline: 'none', color: T.text }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selection groups */}
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 12 }}>선택군 구성</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {tempGroups.map((g, idx) => (
+                    <div key={g.id} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', background: T.bg }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>선택군 {idx + 1}</span>
+                        {tempGroups.length > 1 && (
+                          <button
+                            onClick={() => setTempGroups(prev => prev.filter(x => x.id !== g.id))}
+                            style={{ background: T.dangerSoft, border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', color: T.danger, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, fontFamily: FONT }}
+                          >
+                            <IconTrash />삭제
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px', gap: 8, marginBottom: 8 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: T.textSubtle, marginBottom: 4 }}>학년</label>
+                          <select value={g.grade} onChange={e => setTempGroups(prev => prev.map(x => x.id === g.id ? { ...x, grade: parseInt(e.target.value) } : x))}
+                            style={{ width: '100%', padding: '7px 10px', border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 13, fontFamily: FONT, background: T.surface, outline: 'none', color: T.text }}>
+                            <option value={2}>2학년</option>
+                            <option value={3}>3학년</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: T.textSubtle, marginBottom: 4 }}>학기</label>
+                          <select value={g.semester} onChange={e => setTempGroups(prev => prev.map(x => x.id === g.id ? { ...x, semester: e.target.value } : x))}
+                            style={{ width: '100%', padding: '7px 10px', border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 13, fontFamily: FONT, background: T.surface, outline: 'none', color: T.text }}>
+                            <option>1학기</option>
+                            <option>2학기</option>
+                            <option>1·2학기</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: T.textSubtle, marginBottom: 4 }}>택몇</label>
+                          <input type="number" min={1} max={10} value={g.selectCount}
+                            onChange={e => setTempGroups(prev => prev.map(x => x.id === g.id ? { ...x, selectCount: parseInt(e.target.value) || 1 } : x))}
+                            style={{ width: '100%', padding: '7px 10px', border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 13, fontFamily: FONT, background: T.surface, outline: 'none', color: T.text }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: T.textSubtle, marginBottom: 4 }}>학점</label>
+                          <input type="number" min={1} max={8} value={g.credits}
+                            onChange={e => setTempGroups(prev => prev.map(x => x.id === g.id ? { ...x, credits: parseInt(e.target.value) || 4 } : x))}
+                            style={{ width: '100%', padding: '7px 10px', border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 13, fontFamily: FONT, background: T.surface, outline: 'none', color: T.text }} />
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: T.textSubtle, marginBottom: 4 }}>과목 목록 (쉼표로 구분)</label>
+                        <input type="text" value={g.subjects}
+                          onChange={e => setTempGroups(prev => prev.map(x => x.id === g.id ? { ...x, subjects: e.target.value } : x))}
+                          placeholder="예: 확률과 통계, 미적분, 경제수학"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 13, fontFamily: FONT, outline: 'none', color: T.text }} />
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={() => setTempGroups(prev => [...prev, { id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }])}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: `1.5px dashed ${T.border}`, borderRadius: 10, background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: T.textMuted, fontFamily: FONT }}
+                  >
+                    <IconPlus />선택군 추가
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '14px 20px', borderTop: `1px solid ${T.border}`, background: T.bg, display: 'flex', gap: 8 }}>
+              {isCustomMode && (
+                <button
+                  onClick={() => { setIsCustomMode(false); setShowCustomForm(false); }}
+                  style={{ flex: 1, padding: '12px', background: T.surface, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}
+                >
+                  기본 교육과정 복원
+                </button>
+              )}
+              <button
+                onClick={handleCustomDone}
+                style={{ flex: 2, padding: '12px', background: T.primary, color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}
+              >
+                적용하기
+              </button>
             </div>
           </div>
         </div>

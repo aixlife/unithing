@@ -5,6 +5,9 @@ import { SegibuAnalysis, CompHighlight } from '@/types/analysis';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 const T = {
   primary: '#1B64DA', primarySoft: '#EBF2FF', primaryBorder: '#CFDFFB',
@@ -142,7 +145,7 @@ function YearTabView({
 }
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
-type MainTab = 'overview' | 'changche' | 'curriculum' | 'behavior';
+type MainTab = 'overview' | 'changche' | 'curriculum' | 'behavior' | 'critical';
 type ChangcheTab = 'individual' | 'club' | 'career_act';
 type CurriculumTab = 'korean' | 'math' | 'english' | 'social' | 'science' | 'liberal' | 'arts_phys';
 
@@ -256,8 +259,8 @@ export function Service5Haksaengbu() {
       </div>
 
       {/* ── 메인 탭 ── */}
-      <div style={{ display: 'flex', gap: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '6px 8px' }}>
-        {([['overview', '종합 현황'], ['changche', '창의적 체험활동'], ['curriculum', '교과 세부능력'], ['behavior', '행동 특성']] as const).map(([k, l]) => (
+      <div style={{ display: 'flex', gap: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '6px 8px', flexWrap: 'wrap' }}>
+        {([['overview', '종합 현황'], ['changche', '창의적 체험활동'], ['curriculum', '교과 세부능력'], ['behavior', '행동 특성'], ['critical', '비판적 분석']] as const).map(([k, l]) => (
           <button key={k} style={tabStyle(mainTab === k)} onClick={() => setMainTab(k)}>{l}</button>
         ))}
       </div>
@@ -367,6 +370,46 @@ export function Service5Haksaengbu() {
             raw={r.structuredData.behavior}
             hl={r.highlights.behavior}
           />
+        </div>
+      )}
+
+      {/* ── 비판적 분석 ── */}
+      {mainTab === 'critical' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ background: '#FFF7ED', border: `1px solid #FED7AA`, borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="#D97706" strokeWidth="2" fill="none"/><line x1="12" y1="9" x2="12" y2="13" stroke="#D97706" strokeWidth="2" strokeLinecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="#D97706" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.6, fontFamily: FONT }}>
+              <strong>비판적 관점 분석</strong>이란? 입학사정관의 시각에서 학생부의 강점과 약점을 객관적·비판적으로 평가한 심층 리포트입니다. 단순 칭찬이 아닌 실질적 보완점을 포함합니다.
+            </div>
+          </div>
+
+          {/* 역량 점수 요약 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {(['academic', 'career', 'community'] as const).map(k => {
+              const score = r.scores[k];
+              const { color, soft, label } = T.comp[k];
+              const tier = score >= 85 ? '최상' : score >= 75 ? '상' : score >= 65 ? '중상' : score >= 55 ? '중' : '보완필요';
+              return (
+                <div key={k} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '14px 16px', borderTop: `3px solid ${color}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 4, fontFamily: FONT }}>{label}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                    <span style={{ fontSize: 28, fontWeight: 800, color, fontFamily: FONT }}>{score}</span>
+                    <span style={{ fontSize: 11, color: T.textSubtle, fontFamily: FONT }}>/100</span>
+                    <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: soft, color, fontFamily: FONT }}>{tier}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Full markdown report */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px' }}>
+            <div className="segibu-report" style={{ fontSize: 15, lineHeight: 1.8, color: T.text, fontFamily: FONT }}>
+              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{r.report}</Markdown>
+            </div>
+          </div>
         </div>
       )}
     </div>

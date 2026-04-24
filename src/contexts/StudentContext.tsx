@@ -11,7 +11,7 @@ type StudentContextType = {
   addStudent: (data: Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>) => Promise<Student | null>;
   deleteStudent: (id: string) => Promise<void>;
   segibuAnalysis: SegibuAnalysis | null;
-  analyzeSegibu: (file: File, studentOverride?: Student) => Promise<void>;
+  analyzeSegibu: (input: File | string, studentOverride?: Student) => Promise<void>;
   analysisLoading: boolean;
   analysisError: string | null;
 };
@@ -41,13 +41,22 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setAnalysisError(null);
   }, [currentStudent?.id]);
 
-  const analyzeSegibu = async (file: File, studentOverride?: Student) => {
+  const analyzeSegibu = async (input: File | string, studentOverride?: Student) => {
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/analyze/segibu', { method: 'POST', body: form });
+      let res: Response;
+      if (typeof input === 'string') {
+        res = await fetch('/api/analyze/segibu', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: input }),
+        });
+      } else {
+        const form = new FormData();
+        form.append('file', input);
+        res = await fetch('/api/analyze/segibu', { method: 'POST', body: form });
+      }
       if (!res.ok) throw new Error((await res.json()).error ?? '분석 실패');
       const data: SegibuAnalysis = await res.json();
       setSegibuAnalysis(data);
