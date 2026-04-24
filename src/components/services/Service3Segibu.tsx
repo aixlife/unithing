@@ -44,6 +44,15 @@ const STAGES = [
 ];
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
+// AI가 문자열 대신 객체를 반환할 경우 안전하게 문자열로 변환
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toStr(v: any): string {
+  if (typeof v === 'string') return v;
+  if (v == null) return '';
+  if (typeof v === 'object') return Object.values(v).filter(Boolean).join(' / ');
+  return String(v);
+}
+
 function fmtGrade(v: number | null) {
   return v == null ? '-' : v.toFixed(2);
 }
@@ -707,9 +716,13 @@ export function Service3Segibu() {
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 12 }}>향후 전략 제언</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 6 }}>심화 탐구 제안</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>{r.futureStrategy.deepDive}</div>
+            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>
+              {toStr(r.futureStrategy.deepDive)}
+            </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.warning, marginBottom: 6 }}>연계 과목</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7 }}>{r.futureStrategy.subjects}</div>
+            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7 }}>
+              {toStr(r.futureStrategy.subjects)}
+            </div>
           </div>
         </div>
       )}

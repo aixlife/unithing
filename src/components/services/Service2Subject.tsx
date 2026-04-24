@@ -643,7 +643,9 @@ export function Service2Subject() {
                             style={{
                               width: '100%',
                               background: T.surface,
-                              border: `1px solid ${isSelected ? accentColor : T.border}`,
+                              borderTop: `1px solid ${isSelected ? accentColor : T.border}`,
+                              borderRight: `1px solid ${isSelected ? accentColor : T.border}`,
+                              borderBottom: `1px solid ${isSelected ? accentColor : T.border}`,
                               borderLeft: `3px solid ${accentColor}`,
                               borderRadius: 10,
                               padding: '12px 14px',
