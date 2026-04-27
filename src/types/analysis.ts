@@ -39,6 +39,33 @@ export interface YearData {
   y3: string;
 }
 
+export interface ReadinessIssue {
+  competency: 'academic' | 'career' | 'community';
+  issue: string;
+  evidence: string;
+  recommendation: string;
+}
+
+export interface RoadmapAction {
+  priority: 1 | 2 | 3 | 4 | 5;
+  action: string;
+  linkedService: 'university' | 'subject' | 'seteuk' | 'report';
+  reason: string;
+}
+
+export interface AnalysisReliability {
+  confidence: 'high' | 'medium' | 'low';
+  missingData: string[];
+  notes: string;
+}
+
+export interface AdmissionsReadiness {
+  overall: string;
+  criticalWeaknesses: ReadinessIssue[];
+  nextActions: RoadmapAction[];
+  reliability: AnalysisReliability;
+}
+
 export interface SegibuAnalysis {
   report: string;                  // 마크다운 심층 분석 리포트
   scores: {
@@ -62,6 +89,7 @@ export interface SegibuAnalysis {
     deepDive: string;
     subjects: string;
   };
+  admissionsReadiness?: AdmissionsReadiness;
   highlights: {
     changche: {
       individual: YearHighlights;

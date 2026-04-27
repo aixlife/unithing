@@ -34,6 +34,19 @@ const COMP_COLOR = {
   community: '#059669',
 } as const;
 
+const COMP_LABELS: Record<keyof SegibuAnalysis['scores'], string> = {
+  academic: '학업역량',
+  career: '진로역량',
+  community: '공동체역량',
+};
+
+const SERVICE_LABELS: Record<NonNullable<SegibuAnalysis['admissionsReadiness']>['nextActions'][number]['linkedService'], string> = {
+  university: '대학 찾기',
+  subject: '과목 설계',
+  seteuk: '세특 설계',
+  report: '상담 리포트',
+};
+
 // ── 분석 단계 라벨 ────────────────────────────────────────────────────────────
 const STAGES = [
   { until: 25, label: '생기부 내용을 읽는 중...' },
@@ -288,6 +301,39 @@ function HighlightCard({ highlight }: { highlight: { academic: string; career: s
           <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{highlight[key]}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ReadinessSummary({ readiness }: { readiness: NonNullable<SegibuAnalysis['admissionsReadiness']> }) {
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, gridColumn: '1 / -1' }}>
+      <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 8 }}>상담 처방 요약</div>
+      <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>{readiness.overall}</div>
+
+      {readiness.criticalWeaknesses.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 14 }}>
+          {readiness.criticalWeaknesses.slice(0, 3).map((item, index) => (
+            <div key={`${item.competency}-${index}`} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', background: T.surfaceAlt, borderLeft: `3px solid ${COMP_COLOR[item.competency]}` }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: COMP_COLOR[item.competency], marginBottom: 5 }}>{COMP_LABELS[item.competency]} 보완</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.45, marginBottom: 5 }}>{item.issue}</div>
+              <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55 }}>{item.recommendation}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {readiness.nextActions.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {readiness.nextActions.slice(0, 4).map(action => (
+            <div key={`${action.priority}-${action.action}`} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', borderRadius: 9, background: T.bgAlt, border: `1px solid ${T.border}` }}>
+              <span style={{ width: 22, height: 22, borderRadius: 999, background: T.primary, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{action.priority}</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: T.primary }}>{SERVICE_LABELS[action.linkedService]}</span>
+              <span style={{ fontSize: 13, color: T.textMuted }}>{action.action}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -634,6 +680,7 @@ export function Service3Segibu() {
 
   const r = segibuAnalysis;
   const avgAll = r.groupAverages.all;
+  const readiness = r.admissionsReadiness;
 
   return (
     <div ref={reportRef} style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -702,6 +749,8 @@ export function Service3Segibu() {
       {/* 탭 콘텐츠 */}
       {tab === 'report' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+          {readiness && <ReadinessSummary readiness={readiness} />}
+
           {/* 마크다운 리포트 */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, gridColumn: '1 / -1' }}>
             <div className="segibu-report" style={{ fontSize: 15, lineHeight: 1.8, color: T.text, fontFamily: FONT }}>

@@ -28,6 +28,31 @@ const T = {
 
 const FONT = "'Pretendard Variable', Pretendard, sans-serif";
 
+const SERVICE_LABELS: Record<NonNullable<SegibuAnalysis['admissionsReadiness']>['nextActions'][number]['linkedService'], string> = {
+  university: '대학 찾기',
+  subject: '과목 설계',
+  seteuk: '세특 설계',
+  report: '상담 리포트',
+};
+
+const COMP_LABELS: Record<keyof SegibuAnalysis['scores'], string> = {
+  academic: '학업역량',
+  career: '진로역량',
+  community: '공동체역량',
+};
+
+function toText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  if (Array.isArray(value)) return value.map(toText).filter(Boolean).join('\n');
+  if (typeof value === 'object') return Object.values(value).map(toText).filter(Boolean).join('\n');
+  return String(value);
+}
+
+function collectRecordTexts(record: Record<string, { y1: string; y2: string; y3: string }>): string[] {
+  return Object.values(record).flatMap(item => [item.y1, item.y2, item.y3]);
+}
+
 // ── 키워드 추출 ───────────────────────────────────────────────────────────────
 const STOPWORDS = new Set([
   '및', '을', '를', '이', '가', '은', '는', '에', '의', '로', '에서', '으로', '과', '와', '도',
@@ -106,6 +131,138 @@ function HighlightPill({ label, text, color, soft }: { label: string; text: stri
       <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>{text}</p>
     </div>
   );
+}
+
+function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['admissionsReadiness']> }) {
+  const confidenceLabel = readiness.reliability.confidence === 'high' ? '높음' : readiness.reliability.confidence === 'low' ? '낮음' : '보통';
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px', gridColumn: '1 / -1' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 6, fontFamily: FONT }}>상담 처방 요약</div>
+          <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT }}>{readiness.overall}</p>
+        </div>
+        <span style={{ flexShrink: 0, padding: '4px 9px', borderRadius: 999, background: T.bgAlt, color: T.textMuted, fontSize: 12, fontWeight: 700, fontFamily: FONT }}>
+          신뢰도 {confidenceLabel}
+        </span>
+      </div>
+
+      {readiness.criticalWeaknesses.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 14 }}>
+          {readiness.criticalWeaknesses.slice(0, 3).map((item, index) => {
+            const comp = T.comp[item.competency];
+            return (
+              <div key={`${item.competency}-${index}`} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', background: T.surfaceAlt, borderTop: `3px solid ${comp.color}` }}>
+                <div style={{ fontSize: 11, color: comp.color, fontWeight: 800, letterSpacing: '0.04em', marginBottom: 5, fontFamily: FONT }}>{COMP_LABELS[item.competency]} 보완</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.45, marginBottom: 6, fontFamily: FONT }}>{item.issue}</div>
+                <p style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, margin: '0 0 6px', fontFamily: FONT }}>{item.evidence}</p>
+                <p style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>{item.recommendation}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {readiness.nextActions.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {readiness.nextActions.slice(0, 4).map(action => (
+            <div key={`${action.priority}-${action.action}`} style={{ display: 'grid', gridTemplateColumns: '32px 94px 1fr', gap: 10, alignItems: 'start', padding: '10px 12px', borderRadius: 10, background: T.bgAlt }}>
+              <div style={{ width: 24, height: 24, borderRadius: 999, background: T.primary, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>{action.priority}</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.primary, fontFamily: FONT }}>{SERVICE_LABELS[action.linkedService]}</div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, lineHeight: 1.5, fontFamily: FONT }}>{action.action}</div>
+                <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55, fontFamily: FONT }}>{action.reason}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(readiness.reliability.missingData.length > 0 || readiness.reliability.notes) && (
+        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#F8FAFC', border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.textSubtle, marginBottom: 4, fontFamily: FONT }}>분석 신뢰도 메모</div>
+          {readiness.reliability.missingData.length > 0 && (
+            <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>누락 가능 데이터: {readiness.reliability.missingData.join(', ')}</div>
+          )}
+          {readiness.reliability.notes && (
+            <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{readiness.reliability.notes}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function safeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '_').trim() || '학생';
+}
+
+function buildMarkdownReport(r: SegibuAnalysis, studentName: string, keywords: { text: string; size: number }[]): string {
+  const readiness = r.admissionsReadiness;
+  const lines = [
+    `# ${studentName} 학생부 리포트`,
+    '',
+    `- 학교: ${r.school || '-'}`,
+    `- 학년: ${r.grade || '-'}`,
+    `- 목표 학과: ${r.targetDept || '-'}`,
+    `- 학업역량: ${r.scores.academic}점`,
+    `- 진로역량: ${r.scores.career}점`,
+    `- 공동체역량: ${r.scores.community}점`,
+    '',
+    '## 핵심 요약',
+    '',
+    `### 학업역량`,
+    r.summaryHighlights.academic || '-',
+    '',
+    `### 진로역량`,
+    r.summaryHighlights.career || '-',
+    '',
+    `### 공동체역량`,
+    r.summaryHighlights.community || '-',
+    '',
+    '## 핵심 키워드',
+    '',
+    keywords.map(k => k.text).join(', ') || '-',
+    '',
+    '## 향후 전략',
+    '',
+    `### 심화 탐구 제안`,
+    toText(r.futureStrategy.deepDive) || '-',
+    '',
+    `### 연계 추천 과목`,
+    toText(r.futureStrategy.subjects) || '-',
+  ];
+
+  if (readiness) {
+    lines.push(
+      '',
+      '## 상담 처방',
+      '',
+      readiness.overall || '-',
+      '',
+      '### 주요 보완점',
+      '',
+      ...readiness.criticalWeaknesses.flatMap(item => [
+        `- ${COMP_LABELS[item.competency]}: ${item.issue}`,
+        `  - 근거: ${item.evidence}`,
+        `  - 처방: ${item.recommendation}`,
+      ]),
+      '',
+      '### 다음 액션',
+      '',
+      ...readiness.nextActions.map(action => `- ${action.priority}. [${SERVICE_LABELS[action.linkedService]}] ${action.action}: ${action.reason}`),
+      '',
+      '### 분석 신뢰도',
+      '',
+      `- confidence: ${readiness.reliability.confidence}`,
+      `- missingData: ${readiness.reliability.missingData.join(', ') || '-'}`,
+      `- notes: ${readiness.reliability.notes || '-'}`,
+    );
+  }
+
+  lines.push('', '## 심층 분석 리포트', '', r.report || '-');
+  return lines.join('\n');
 }
 
 // 연도 탭 + 텍스트 + 하이라이트 뷰
@@ -198,17 +355,20 @@ export function Service5Haksaengbu() {
   }
 
   const r = segibuAnalysis;
+  const readiness = r.admissionsReadiness;
   const studentName = currentStudent?.name ?? r.studentName ?? '학생';
   const avg3 = Math.round((r.scores.academic + r.scores.career + r.scores.community) / 3);
 
   // 키워드: structuredData 전체 텍스트에서 추출
   const allTexts = [
-    r.structuredData.changche.individual.y1, r.structuredData.changche.individual.y2, r.structuredData.changche.individual.y3,
-    r.structuredData.changche.club.y1, r.structuredData.changche.club.y2, r.structuredData.changche.club.y3,
-    r.structuredData.changche.career_act.y1, r.structuredData.changche.career_act.y2, r.structuredData.changche.career_act.y3,
-    r.structuredData.curriculum.korean.y1, r.structuredData.curriculum.math.y1, r.structuredData.curriculum.english.y1,
+    ...collectRecordTexts(r.structuredData.changche),
+    ...collectRecordTexts(r.structuredData.curriculum),
+    r.structuredData.behavior.y1, r.structuredData.behavior.y2, r.structuredData.behavior.y3,
     r.summaryHighlights.academic, r.summaryHighlights.career, r.summaryHighlights.community,
-  ].filter(Boolean);
+    toText(r.futureStrategy.deepDive), toText(r.futureStrategy.subjects),
+    readiness?.overall,
+    ...(readiness?.criticalWeaknesses.flatMap(item => [item.issue, item.evidence, item.recommendation]) ?? []),
+  ].filter((text): text is string => Boolean(text));
   const keywords = extractKeywords(allTexts);
 
   // PDF 다운로드
@@ -231,6 +391,17 @@ export function Service5Haksaengbu() {
     } finally {
       setDownloading(false);
     }
+  }
+
+  function handleMarkdown() {
+    const markdown = buildMarkdownReport(r, studentName, keywords);
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeFilename(studentName)}_학생부리포트.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const tabStyle = (active: boolean) => ({
@@ -260,13 +431,21 @@ export function Service5Haksaengbu() {
           </div>
           {r.school && <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 3, fontFamily: FONT }}>{r.school}</div>}
         </div>
-        <button onClick={handlePdf} disabled={downloading} style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: downloading ? 'not-allowed' : 'pointer',
-          background: T.primary, color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: FONT, opacity: downloading ? 0.7 : 1, flexShrink: 0,
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 16L6 10h4V3h4v7h4l-6 6z" fill="white"/><path d="M5 20h14" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
-          {downloading ? '생성 중...' : 'PDF 저장'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button onClick={handleMarkdown} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 8, border: `1px solid ${T.border}`, cursor: 'pointer',
+            background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+          }}>
+            Markdown 저장
+          </button>
+          <button onClick={handlePdf} disabled={downloading} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: downloading ? 'not-allowed' : 'pointer',
+            background: T.primary, color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: FONT, opacity: downloading ? 0.7 : 1,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 16L6 10h4V3h4v7h4l-6 6z" fill="white"/><path d="M5 20h14" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+            {downloading ? '생성 중...' : 'PDF 저장'}
+          </button>
+        </div>
       </div>
 
       {/* ── 메인 탭 ── */}
@@ -318,6 +497,8 @@ export function Service5Haksaengbu() {
             <KeywordCloud words={keywords} />
           </div>
 
+          {readiness && <ReadinessCard readiness={readiness} />}
+
           {/* 역량 요약 */}
           {(['academic', 'career', 'community'] as const).map(k => (
             <div key={k} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px', borderTop: `4px solid ${T.comp[k].color}` }}>
@@ -332,11 +513,11 @@ export function Service5Haksaengbu() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ padding: '14px 16px', borderRadius: 10, background: T.primarySoft, border: `1px solid ${T.primaryBorder}` }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>심화 탐구 제안</div>
-                <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT }}>{r.futureStrategy.deepDive}</p>
+                <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT, whiteSpace: 'pre-line' }}>{toText(r.futureStrategy.deepDive)}</p>
               </div>
               <div style={{ padding: '14px 16px', borderRadius: 10, background: T.warningSoft, border: `1px solid #FCD89A` }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.warning, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>연계 추천 과목</div>
-                <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT }}>{r.futureStrategy.subjects}</p>
+                <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT, whiteSpace: 'pre-line' }}>{toText(r.futureStrategy.subjects)}</p>
               </div>
             </div>
           </div>

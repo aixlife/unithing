@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type Content, type GenerationConfig, type GenerativeModel } from '@google/generative-ai';
+import type { AdmissionsReadiness, CompKey, SegibuAnalysis } from '@/types/analysis';
 
 const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를 실제 입학사정관의 관점에서 정밀하게 분석하는 '생기부 분석 전문 AI'입니다.
 본 분석은 서울대, 이화여대, 서강대, 경희대, 동국대, 건국대 등 주요 대학의 학생부종합전형 평가 기준을 종합적으로 반영합니다.
@@ -54,6 +55,42 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
   "futureStrategy": {
     "deepDive": "심화 탐구 제안 (구체적 주제 3가지 이상, 각 주제에 연계 교과·활동 방향 포함)",
     "subjects": "연계 과목 제안 (일반선택/진로선택 구분하여 제시)"
+  },
+  "admissionsReadiness": {
+    "overall": "입학사정관 관점의 한 줄 종합 판단. 현재 학생부가 목표 학과 상담에서 어떤 상태인지 냉정하게 요약",
+    "criticalWeaknesses": [
+      {
+        "competency": "academic",
+        "issue": "가장 먼저 보완해야 할 약점",
+        "evidence": "생기부 원문에서 확인되는 근거",
+        "recommendation": "상담 현장에서 바로 제시할 처방"
+      },
+      {
+        "competency": "career",
+        "issue": "두 번째 보완점",
+        "evidence": "생기부 원문 근거",
+        "recommendation": "대학/학과/과목/세특으로 이어지는 처방"
+      }
+    ],
+    "nextActions": [
+      {
+        "priority": 1,
+        "action": "다음에 해야 할 상담/서비스 액션",
+        "linkedService": "university",
+        "reason": "왜 이 액션이 필요한지"
+      },
+      {
+        "priority": 2,
+        "action": "세특 또는 과목 설계 액션",
+        "linkedService": "seteuk",
+        "reason": "생기부 보완점과 연결되는 이유"
+      }
+    ],
+    "reliability": {
+      "confidence": "high",
+      "missingData": ["분석 신뢰도를 낮추는 누락 데이터가 있으면 항목별로 작성"],
+      "notes": "성적/창체/세특/행특 중 어떤 근거가 충분하거나 부족했는지 설명"
+    }
   },
   "grades": {
     "korean":  { "s1_1": null, "s1_2": null, "s2_1": null, "s2_2": null, "s3_1": null, "avg": null },
@@ -119,7 +156,206 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
   * 83~87점: 우수. 자기주도적 탐구와 성장 과정이 뚜렷하게 증명됨
   * 90~94점: 매우 우수. 수도권 상위권 대학 합격자 수준의 역량 증거
   * 95점 이상: 최상위권. 서울대·최상위권 합격 수준에만 부여
-  * ⚠️ 90점 이상은 정말 예외적인 경우에만 부여하세요. 대부분의 생기부는 70~83점 범위에 해당합니다.`;
+  * ⚠️ 90점 이상은 정말 예외적인 경우에만 부여하세요. 대부분의 생기부는 70~83점 범위에 해당합니다.
+  * ⚠️ 세 역량 평균은 원칙적으로 78~82점 전후가 되도록 변별력을 유지하세요. 내신 등급이 높다는 이유만으로 90점 이상을 주지 마세요.
+  * ⚠️ 전국 단위 수상, 논문급 산출물, 3년 연속 전공 심화 탐구처럼 최상위권 근거가 명확하지 않으면 개별 역량도 88점을 넘기지 마세요.
+
+※ 상담 연결 지시:
+- 학생부종합전형 체크리스트의 세부 기준을 반드시 반영하세요.
+  - 학업역량: 학업 성취도, 학업 태도, 탐구력
+  - 진로역량: 전공 관련 교과 이수노력, 전공 관련 교과 성취도, 진로 탐색 활동과 경험
+  - 공동체역량: 협업과 소통, 나눔과 배려, 성실성과 규칙준수, 리더십
+- admissionsReadiness.criticalWeaknesses에는 단순한 감상이 아니라 "원문 근거 -> 약점 -> 처방"의 순서가 드러나야 합니다.
+- admissionsReadiness.nextActions는 UNITHING의 다음 서비스 흐름에 맞춰 작성하세요.
+  - university: 대학 찾기/목표 대학 선택
+  - subject: 목표 대학·학과 기준 과목 설계
+  - seteuk: 부족 역량을 보완하는 세특 활동 설계
+  - report: 학생부 리포트/상담 기록 정리
+- reliability.confidence는 high, medium, low 중 하나만 사용하세요. 성적표, 창체, 세특, 행특 중 핵심 데이터가 누락되면 medium 또는 low로 낮추세요.`;
+
+const GENERATION_CONFIG = {
+  thinkingConfig: { thinkingBudget: 0 },
+} as GenerationConfig;
+
+const DEFAULT_READINESS: AdmissionsReadiness = {
+  overall: '분석 결과를 바탕으로 대학 찾기, 과목 설계, 세특 보완을 순차적으로 진행해야 합니다.',
+  criticalWeaknesses: [],
+  nextActions: [
+    {
+      priority: 1,
+      action: '목표 대학과 학과를 먼저 정해 현재 학생부와의 차이를 확인하세요.',
+      linkedService: 'university',
+      reason: '목표가 정해져야 과목 선택과 세특 보완 방향을 구체화할 수 있습니다.',
+    },
+  ],
+  reliability: {
+    confidence: 'medium',
+    missingData: [],
+    notes: 'AI 응답에 상담 처방 구조가 없어 기본 안내를 표시합니다.',
+  },
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value.trim();
+  if (value == null) return fallback;
+  return String(value).trim();
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(v => asString(v)).filter(Boolean);
+}
+
+function isCompKey(value: unknown): value is CompKey {
+  return value === 'academic' || value === 'career' || value === 'community';
+}
+
+function normalizeConfidence(value: unknown): AdmissionsReadiness['reliability']['confidence'] {
+  if (value === 'high' || value === 'medium' || value === 'low') return value;
+  if (value === '높음') return 'high';
+  if (value === '낮음') return 'low';
+  return 'medium';
+}
+
+function normalizeLinkedService(value: unknown): AdmissionsReadiness['nextActions'][number]['linkedService'] {
+  if (value === 'university' || value === 'subject' || value === 'seteuk' || value === 'report') return value;
+  return 'report';
+}
+
+function normalizePriority(value: unknown, fallback: number): AdmissionsReadiness['nextActions'][number]['priority'] {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (n === 1 || n === 2 || n === 3 || n === 4 || n === 5) return n;
+  return fallback as AdmissionsReadiness['nextActions'][number]['priority'];
+}
+
+function normalizeReadiness(value: unknown): AdmissionsReadiness {
+  const raw = asRecord(value);
+  const weaknesses = Array.isArray(raw.criticalWeaknesses) ? raw.criticalWeaknesses : [];
+  const actions = Array.isArray(raw.nextActions) ? raw.nextActions : [];
+  const reliability = asRecord(raw.reliability);
+
+  return {
+    overall: asString(raw.overall, DEFAULT_READINESS.overall),
+    criticalWeaknesses: weaknesses.slice(0, 5).map((item) => {
+      const record = asRecord(item);
+      return {
+        competency: isCompKey(record.competency) ? record.competency : 'academic',
+        issue: asString(record.issue, '구체적인 보완점 확인 필요'),
+        evidence: asString(record.evidence, '생기부 원문 근거 확인 필요'),
+        recommendation: asString(record.recommendation, '후속 상담에서 보완 활동을 구체화하세요.'),
+      };
+    }),
+    nextActions: actions.slice(0, 5).map((item, idx) => {
+      const record = asRecord(item);
+      return {
+        priority: normalizePriority(record.priority, Math.min(idx + 1, 5)),
+        action: asString(record.action, '후속 상담 액션을 정리하세요.'),
+        linkedService: normalizeLinkedService(record.linkedService),
+        reason: asString(record.reason, '생기부 분석 결과와 연결되는 후속 조치입니다.'),
+      };
+    }),
+    reliability: {
+      confidence: normalizeConfidence(reliability.confidence),
+      missingData: asStringArray(reliability.missingData),
+      notes: asString(reliability.notes, DEFAULT_READINESS.reliability.notes),
+    },
+  };
+}
+
+function normalizeScore(value: unknown): number {
+  const score = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(score)) return 70;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function calibrateScores(value: unknown): SegibuAnalysis['scores'] {
+  const raw = asRecord(value);
+  const capped = {
+    academic: Math.min(normalizeScore(raw.academic), 88),
+    career: Math.min(normalizeScore(raw.career), 88),
+    community: Math.min(normalizeScore(raw.community), 88),
+  };
+  const avg = (capped.academic + capped.career + capped.community) / 3;
+  if (avg <= 82) return capped;
+
+  const adjustment = avg - 82;
+  return {
+    academic: Math.max(55, Math.round(capped.academic - adjustment)),
+    career: Math.max(55, Math.round(capped.career - adjustment)),
+    community: Math.max(55, Math.round(capped.community - adjustment)),
+  };
+}
+
+function extractJsonText(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+
+  const first = raw.indexOf('{');
+  const last = raw.lastIndexOf('}');
+  if (first >= 0 && last > first) return raw.slice(first, last + 1).trim();
+
+  throw new Error('JSON 파싱 실패 — AI 응답에 JSON 블록이 없습니다.');
+}
+
+function stripJsonFromReport(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*[\s\S]*?```/i);
+  if (fenced) return raw.replace(fenced[0], '').trim();
+
+  const first = raw.indexOf('{');
+  const last = raw.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    return `${raw.slice(0, first)}${raw.slice(last + 1)}`.trim();
+  }
+  return raw.trim();
+}
+
+function parseAnalysis(raw: string): SegibuAnalysis {
+  const parsed = JSON.parse(extractJsonText(raw)) as Record<string, unknown>;
+  return {
+    ...parsed,
+    scores: calibrateScores(parsed.scores),
+    admissionsReadiness: normalizeReadiness(parsed.admissionsReadiness),
+    report: stripJsonFromReport(raw),
+  } as SegibuAnalysis;
+}
+
+async function generateAnalysis(model: GenerativeModel, contents: Content[]): Promise<SegibuAnalysis> {
+  const result = await model.generateContent({ contents, generationConfig: GENERATION_CONFIG });
+  const raw = result.response.text().trim();
+
+  try {
+    return parseAnalysis(raw);
+  } catch (firstError) {
+    const repair = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [{
+          text: `아래 AI 응답은 JSON 파싱에 실패했습니다. 내용을 새로 분석하지 말고, 기존 내용을 보존하면서 "마크다운 리포트 + \`\`\`json ... \`\`\`" 형식으로만 고쳐서 다시 출력하세요.\n\n[파싱 오류]\n${String(firstError)}\n\n[원본 응답]\n${raw}`,
+        }],
+      }],
+      generationConfig: GENERATION_CONFIG,
+    });
+    return parseAnalysis(repair.response.text().trim());
+  }
+}
+
+function getErrorDetail(error: unknown): string {
+  const message = String(error);
+  if (message.includes('API_KEY_INVALID') || message.includes('API Key not found')) {
+    return 'Gemini API 키가 유효하지 않습니다. 로컬 .env.local 또는 Vercel 환경변수의 GEMINI_API_KEY를 확인해 주세요.';
+  }
+  if (message.includes('JSON 파싱 실패')) {
+    return 'AI 응답 형식이 올바르지 않습니다. 다시 분석을 실행해 주세요.';
+  }
+  if (message.includes('quota') || message.includes('429')) {
+    return 'Gemini API 사용량 제한에 걸렸을 수 있습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  return message;
+}
 
 export async function POST(req: Request) {
   try {
@@ -149,22 +385,10 @@ export async function POST(req: Request) {
       ];
     }
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any,
-    });
-
-    const raw = result.response.text().trim();
-    const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) throw new Error('JSON 파싱 실패 — AI 응답 형식 오류');
-
-    const jsonData = JSON.parse(jsonMatch[1].trim());
-    const report = raw.replace(/```json[\s\S]*?```/, '').trim();
-
-    return Response.json({ ...jsonData, report });
+    const analysis = await generateAnalysis(model, [{ role: 'user', parts }]);
+    return Response.json(analysis);
   } catch (e) {
     console.error(e);
-    return Response.json({ error: '분석 실패', detail: String(e) }, { status: 500 });
+    return Response.json({ error: '분석 실패', detail: getErrorDetail(e) }, { status: 500 });
   }
 }
