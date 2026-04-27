@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { Student } from '@/lib/supabase';
 import { SegibuAnalysis } from '@/types/analysis';
 
@@ -18,28 +18,30 @@ type StudentContextType = {
 
 const StudentContext = createContext<StudentContextType | null>(null);
 
+function isCurrentAnalysis(raw: Student['segibu_analysis'] | undefined): raw is SegibuAnalysis {
+  return Boolean(raw && raw.structuredData && raw.highlights && raw.scores);
+}
+
 export function StudentProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [currentStudent, setCurrentStudentState] = useState<Student | null>(null);
-  const [segibuAnalysis, setSegibuAnalysis] = useState<SegibuAnalysis | null>(null);
+  const [manualAnalysis, setManualAnalysis] = useState<SegibuAnalysis | null>(null);
+  const [manualAnalysisStudentId, setManualAnalysisStudentId] = useState<string | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  const setCurrentStudent = (s: Student | null) => {
+  const setCurrentStudent = useCallback((s: Student | null) => {
     setCurrentStudentState(s);
-  };
-
-  // 학생 바뀌면 저장된 분석 결과 로드 (없거나 구형 포맷이면 null)
-  useEffect(() => {
-    const raw = currentStudent?.segibu_analysis;
-    // structuredData 필드 존재 여부로 신규 포맷 검증 — 구형이면 재분석 유도
-    if (raw && raw.structuredData && raw.highlights && raw.scores) {
-      setSegibuAnalysis(raw);
-    } else {
-      setSegibuAnalysis(null);
-    }
     setAnalysisError(null);
-  }, [currentStudent?.id]);
+  }, []);
+
+  const segibuAnalysis = useMemo(() => {
+    if (manualAnalysis && (manualAnalysisStudentId ? manualAnalysisStudentId === currentStudent?.id : !currentStudent)) {
+      return manualAnalysis;
+    }
+    const raw = currentStudent?.segibu_analysis;
+    return isCurrentAnalysis(raw) ? raw : null;
+  }, [currentStudent, manualAnalysis, manualAnalysisStudentId]);
 
   const analyzeSegibu = async (input: File | string, studentOverride?: Student) => {
     setAnalysisLoading(true);
@@ -59,9 +61,10 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       }
       if (!res.ok) throw new Error((await res.json()).error ?? '분석 실패');
       const data: SegibuAnalysis = await res.json();
-      setSegibuAnalysis(data);
 
       const target = studentOverride ?? currentStudent;
+      setManualAnalysis(data);
+      setManualAnalysisStudentId(target?.id ?? null);
       if (target) {
         const patchRes = await fetch(`/api/students/${target.id}`, {
           method: 'PATCH',
@@ -114,7 +117,21 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  useEffect(() => { loadStudents(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/students')
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const data: Student[] = await res.json();
+        if (cancelled) return;
+        setStudents(data);
+        if (data.length > 0) setCurrentStudent(data[0]);
+      })
+      .catch(() => { /* initial load failure is shown by empty state */ });
+
+    return () => { cancelled = true; };
+  }, [setCurrentStudent]);
 
   return (
     <StudentContext.Provider value={{

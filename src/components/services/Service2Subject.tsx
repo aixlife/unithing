@@ -102,6 +102,31 @@ const IconCheckSquare = () => (
   </svg>
 );
 
+function normalizeSubjectName(name: string) {
+  if (!name) return '';
+  return name
+    .replace(/\s+/g, '')
+    .replace(/Ⅰ/g, '1').replace(/Ⅱ/g, '2').replace(/Ⅲ/g, '3')
+    .replace(/Ⅳ/g, '4').replace(/Ⅴ/g, '5').replace(/Ⅵ/g, '6')
+    .replace(/Ⅶ/g, '7').replace(/Ⅷ/g, '8').replace(/Ⅸ/g, '9').replace(/Ⅹ/g, '10')
+    .toLowerCase();
+}
+
+function normalizeMajorName(name: string) {
+  if (!name) return '';
+  return name.replace(/\s+/g, '').replace(/\(.*\)/g, '').replace(/(과|부|전공|계열)$/, '').toLowerCase();
+}
+
+function getGradingType(name: string) {
+  const n = normalizeSubjectName(name);
+  const core = ['문학', '독서와 작문', '대수', '미적분Ⅰ', '영어Ⅰ', '영어Ⅱ'].map(normalizeSubjectName);
+  if (core.includes(n)) return '수능 출제/5등급';
+  const ach3 = ['운동과 건강', '스포츠 생활1', '스포츠 생활2', '음악 연주와 창작', '미술 창작', '음악 감상과 비평', '미술과 매체', '음악과 미디어', '미술 감상과 비평', '스포츠 문화', '스포츠 문학', '스포츠 과학'].map(normalizeSubjectName);
+  if (ach3.includes(n)) return '성취도 3단계';
+  if (normalizeSubjectName('기후변화와 환경생태') === n) return '성취도 5단계';
+  return '5등급';
+}
+
 export function Service2Subject() {
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
@@ -115,7 +140,7 @@ export function Service2Subject() {
   const [customMandatory, setCustomMandatory] = useState<Record<number, SungshinSubject[]>>({});
   const [tempMandatory, setTempMandatory] = useState({ '2-1': '', '2-2': '', '3-1': '', '3-2': '' });
   const [tempGroups, setTempGroups] = useState<{ id: number; grade: number; semester: string; credits: number; selectCount: number; subjects: string }[]>([
-    { id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }
+    { id: 1, grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }
   ]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -123,16 +148,6 @@ export function Service2Subject() {
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
-
-  const normalizeSubjectName = (name: string) => {
-    if (!name) return '';
-    return name
-      .replace(/\s+/g, '')
-      .replace(/Ⅰ/g, '1').replace(/Ⅱ/g, '2').replace(/Ⅲ/g, '3')
-      .replace(/Ⅳ/g, '4').replace(/Ⅴ/g, '5').replace(/Ⅵ/g, '6')
-      .replace(/Ⅶ/g, '7').replace(/Ⅷ/g, '8').replace(/Ⅸ/g, '9').replace(/Ⅹ/g, '10')
-      .toLowerCase();
-  };
 
   const allMajors = useMemo(() => {
     return FIELD_DATA.flatMap(field => field.majors.map(major => ({ ...major, fieldName: field.name })));
@@ -142,11 +157,6 @@ export function Service2Subject() {
     if (!searchTerm.trim()) return [];
     return allMajors.filter(major => major.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, allMajors]);
-
-  const normalizeMajorName = (name: string) => {
-    if (!name) return '';
-    return name.replace(/\s+/g, '').replace(/\(.*\)/g, '').replace(/(과|부|전공|계열)$/, '').toLowerCase();
-  };
 
   const universityTips = useMemo(() => {
     if (!selectedMajor) return [];
@@ -215,21 +225,11 @@ export function Service2Subject() {
       if (fh > maxH) { fh = maxH; fw = (img.width * fh) / img.height; }
       pdf.addImage(dataUrl, 'JPEG', (pdfWidth - fw) / 2, margin, fw, fh);
       pdf.save(`2022개정_선택과목가이드_${selectedMajor.name}_${planGrade}학년.pdf`);
-    } catch (error: unknown) {
+    } catch {
       setErrorMsg('PDF 생성 실패. 브라우저 인쇄(PDF로 저장)를 이용해 주세요.');
     } finally {
       setIsDownloading(false);
     }
-  };
-
-  const getGradingType = (name: string) => {
-    const n = normalizeSubjectName(name);
-    const core = ['문학', '독서와 작문', '대수', '미적분Ⅰ', '영어Ⅰ', '영어Ⅱ'].map(normalizeSubjectName);
-    if (core.includes(n)) return '수능 출제/5등급';
-    const ach3 = ['운동과 건강', '스포츠 생활1', '스포츠 생활2', '음악 연주와 창작', '미술 창작', '음악 감상과 비평', '미술과 매체', '음악과 미디어', '미술 감상과 비평', '스포츠 문화', '스포츠 문학', '스포츠 과학'].map(normalizeSubjectName);
-    if (ach3.includes(n)) return '성취도 3단계';
-    if (normalizeSubjectName('기후변화와 환경생태') === n) return '성취도 5단계';
-    return '5등급';
   };
 
   const planData = useMemo(() => {

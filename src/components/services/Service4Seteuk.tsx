@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 
 const T = {
@@ -64,6 +64,22 @@ const TIPS: Record<number, { expert: string; writing: string }> = {
 
 const LS_DATA = 'unithing_seteuk_data';
 const LS_PHASE = 'unithing_seteuk_phase';
+
+type SavedSeteukData = {
+  major?: string;
+  interest?: string;
+  activities?: string;
+  topics?: TopicItem[];
+  selectedTopic?: string;
+  motivations?: MotivationItem[];
+  selectedMotivation?: string;
+  competencies?: CompetencyItem[];
+  selectedCompetencies?: string[];
+  followUps?: FollowUpItem[];
+  selectedFollowUp?: string;
+  draft?: string;
+  plan?: { plan: PlanItem[] };
+};
 
 // ─── Input helpers ────────────────────────────────────────────────────────────
 function inputStyle(focused: boolean) {
@@ -668,38 +684,43 @@ export function Service4Seteuk() {
   const [plan, setPlan] = useState<{ plan: PlanItem[] } | null>(null);
   const [finalLoading, setFinalLoading] = useState(false);
   const [finalError, setFinalError] = useState<string | null>(null);
+  const restoredRef = useRef(false);
+  const effectiveMajor = major || currentStudent?.target_dept || '';
 
   // Load from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem(LS_DATA);
-    const savedPhase = localStorage.getItem(LS_PHASE);
-    if (saved) {
-      try {
-        const d = JSON.parse(saved);
-        if (d.major) setMajor(d.major);
-        if (d.interest) setInterest(d.interest);
-        if (d.activities) setActivities(d.activities);
-        if (d.topics) setTopics(d.topics);
-        if (d.selectedTopic) setSelectedTopic(d.selectedTopic);
-        if (d.motivations) setMotivations(d.motivations);
-        if (d.selectedMotivation) setSelectedMotivation(d.selectedMotivation);
-        if (d.competencies) setCompetencies(d.competencies);
-        if (d.selectedCompetencies) setSelectedCompetencies(d.selectedCompetencies);
-        if (d.followUps) setFollowUps(d.followUps);
-        if (d.selectedFollowUp) setSelectedFollowUp(d.selectedFollowUp);
-        if (d.draft) setDraft(d.draft);
-        if (d.plan) setPlan(d.plan);
-      } catch { /* ignore */ }
-    }
-    if (savedPhase) setPhase(parseInt(savedPhase) as Phase);
-    // fallback to student context for major
-    if (!saved && currentStudent?.target_dept) setMajor(currentStudent.target_dept);
-  }, [currentStudent?.target_dept]);
+    const timer = window.setTimeout(() => {
+      const saved = localStorage.getItem(LS_DATA);
+      const savedPhase = localStorage.getItem(LS_PHASE);
+      if (saved) {
+        try {
+          const d = JSON.parse(saved) as SavedSeteukData;
+          if (d.major) setMajor(d.major);
+          if (d.interest) setInterest(d.interest);
+          if (d.activities) setActivities(d.activities);
+          if (d.topics) setTopics(d.topics);
+          if (d.selectedTopic) setSelectedTopic(d.selectedTopic);
+          if (d.motivations) setMotivations(d.motivations);
+          if (d.selectedMotivation) setSelectedMotivation(d.selectedMotivation);
+          if (d.competencies) setCompetencies(d.competencies);
+          if (d.selectedCompetencies) setSelectedCompetencies(d.selectedCompetencies);
+          if (d.followUps) setFollowUps(d.followUps);
+          if (d.selectedFollowUp) setSelectedFollowUp(d.selectedFollowUp);
+          if (d.draft) setDraft(d.draft);
+          if (d.plan) setPlan(d.plan);
+        } catch { /* ignore */ }
+      }
+      if (savedPhase) setPhase(parseInt(savedPhase) as Phase);
+      restoredRef.current = true;
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Save to localStorage
   useEffect(() => {
+    if (!restoredRef.current) return;
     localStorage.setItem(LS_DATA, JSON.stringify({
-      major, interest, activities,
+      major: effectiveMajor, interest, activities,
       topics, selectedTopic,
       motivations, selectedMotivation,
       competencies, selectedCompetencies,
@@ -707,7 +728,7 @@ export function Service4Seteuk() {
       draft, plan,
     }));
     localStorage.setItem(LS_PHASE, phase.toString());
-  }, [major, interest, activities, topics, selectedTopic, motivations, selectedMotivation, competencies, selectedCompetencies, followUps, selectedFollowUp, draft, plan, phase]);
+  }, [effectiveMajor, interest, activities, topics, selectedTopic, motivations, selectedMotivation, competencies, selectedCompetencies, followUps, selectedFollowUp, draft, plan, phase]);
 
   const toggleCompetency = (key: string) => {
     setSelectedCompetencies(prev =>
@@ -770,7 +791,7 @@ export function Service4Seteuk() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          major, interest, topic: selectedTopic,
+          major: effectiveMajor, interest, topic: selectedTopic,
           motivation: selectedMotivation,
           competencies: selectedCompetencies,
           followUp: selectedFollowUp,
@@ -789,7 +810,7 @@ export function Service4Seteuk() {
 
   const handleNext = async () => {
     if (phase === 1) {
-      if (topics.length === 0) await fetchTopics(major, interest, activities);
+      if (topics.length === 0) await fetchTopics(effectiveMajor, interest, activities);
       setPhase(2);
     } else if (phase === 2) {
       if (motivations.length === 0) await fetchMotivations(selectedTopic);
@@ -825,7 +846,7 @@ export function Service4Seteuk() {
   };
 
   const canNext = () => {
-    if (phase === 1) return major.trim().length > 0 && interest.trim().length > 0 && !topicsLoading;
+    if (phase === 1) return effectiveMajor.trim().length > 0 && interest.trim().length > 0 && !topicsLoading;
     if (phase === 2) return selectedTopic.trim().length > 0;
     if (phase === 3) return selectedMotivation.trim().length > 0;
     if (phase === 4) return selectedCompetencies.length > 0;
@@ -844,7 +865,7 @@ export function Service4Seteuk() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
         {phase === 1 && (
           <Phase1
-            major={major} setMajor={setMajor}
+            major={effectiveMajor} setMajor={setMajor}
             interest={interest} setInterest={setInterest}
             activities={activities} setActivities={setActivities}
             onNext={handleNext} loading={topicsLoading}
@@ -854,7 +875,7 @@ export function Service4Seteuk() {
           <Phase2
             topics={topics} loading={topicsLoading}
             selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic}
-            onRefresh={() => fetchTopics(major, interest, activities)}
+            onRefresh={() => fetchTopics(effectiveMajor, interest, activities)}
             onNext={handleNext}
           />
         )}

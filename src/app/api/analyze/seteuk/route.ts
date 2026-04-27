@@ -101,6 +101,7 @@ export async function POST(req: Request) {
 
 [정보]
 - 희망 학과: ${major}
+- 관심 주제/호기심: ${interest}
 - 탐구 주제: ${topic}
 - 탐구 동기: ${motivation}
 - 핵심 역량: ${compStr}
@@ -111,6 +112,7 @@ export async function POST(req: Request) {
 
 [정보]
 - 희망 학과: ${major}
+- 관심 주제/호기심: ${interest}
 - 탐구 주제: ${topic}
 - 탐구 동기: ${motivation}
 - 핵심 역량: ${compStr}

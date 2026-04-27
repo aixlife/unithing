@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
-import { SegibuAnalysis, CompHighlight } from '@/types/analysis';
+import { SegibuAnalysis } from '@/types/analysis';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -73,7 +73,7 @@ function ScoreBar({ label, score, color, soft }: { label: string; score: number;
         <span style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, fontFamily: FONT }}>{label}</span>
         <span style={{ fontSize: 18, fontWeight: 800, color, fontFamily: FONT }}>{score}점</span>
       </div>
-      <div style={{ height: 8, borderRadius: 4, background: T.bg }}>
+      <div style={{ height: 8, borderRadius: 4, background: soft }}>
         <div style={{ height: '100%', borderRadius: 4, background: color, width: `${score}%`, transition: 'width 0.6s ease' }} />
       </div>
     </div>
