@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { Student } from '@/lib/supabase';
+import { normalizeSegibuAnalysis } from '@/lib/segibuAnalysis';
 import { SegibuAnalysis } from '@/types/analysis';
 
 type StudentCreate = Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>;
@@ -22,10 +23,6 @@ type StudentContextType = {
 
 const StudentContext = createContext<StudentContextType | null>(null);
 
-function isCurrentAnalysis(raw: Student['segibu_analysis'] | undefined): raw is SegibuAnalysis {
-  return Boolean(raw && raw.structuredData && raw.highlights && raw.scores);
-}
-
 export function StudentProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [currentStudent, setCurrentStudentState] = useState<Student | null>(null);
@@ -44,7 +41,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       return manualAnalysis;
     }
     const raw = currentStudent?.segibu_analysis;
-    return isCurrentAnalysis(raw) ? raw : null;
+    return normalizeSegibuAnalysis(raw);
   }, [currentStudent, manualAnalysis, manualAnalysisStudentId]);
 
   const analyzeSegibu = async (input: File | string, studentOverride?: Student) => {
@@ -64,7 +61,8 @@ export function StudentProvider({ children }: { children: ReactNode }) {
         res = await fetch('/api/analyze/segibu', { method: 'POST', body: form });
       }
       if (!res.ok) throw new Error((await res.json()).error ?? '분석 실패');
-      const data: SegibuAnalysis = await res.json();
+      const data = normalizeSegibuAnalysis(await res.json());
+      if (!data) throw new Error('분석 결과 형식이 올바르지 않습니다.');
 
       const target = studentOverride ?? currentStudent;
       setManualAnalysis(data);

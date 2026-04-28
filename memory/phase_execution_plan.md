@@ -422,6 +422,22 @@ updated: 2026-04-28
 - `Service5Haksaengbu` wrapper는 기존 import 호환용으로 유지함.
 - 문서 `docs/phase-1-analysis-report.md`와 기준선 문서를 현재 구조에 맞게 업데이트함.
 
+## Post-Phase Hotfix — 생기부 분석 교과 세특 런타임 보강
+
+**상태:** 완료 — 2026-04-28
+
+**배경:** Vercel 배포본에서 `생기부 분석 > 학생부 심층분석 > 교과 세특 > 수학 > 2학년` 선택 시 오류가 발생함.
+
+### 완료 기록
+
+- AI 분석 JSON의 일부 교과/학년 필드가 누락되거나 key가 흔들릴 때 화면이 바로 nested property에 접근하던 문제를 확인함.
+- `src/lib/segibuAnalysis.ts` normalization 유틸을 추가함.
+- API 분석 응답 생성 시점에서 `SegibuAnalysis` 표준 스키마를 보장하도록 연결함.
+- 클라이언트에서 Supabase 저장 분석을 읽을 때도 동일 normalization을 적용해 기존 저장 데이터까지 보정되도록 함.
+- `structuredData`, `highlights`, `grades`, `summaryHighlights`, `futureStrategy`, `admissionsReadiness` 누락 필드에 안전한 기본값을 채움.
+- 교과/활동/학년 key의 영어·한국어 alias를 함께 처리하도록 함.
+- 세부 기록: [Phase 1 Analysis Report](../docs/phase-1-analysis-report.md)
+
 ## 우선 작업 큐
 
 1. Phase 0 완료

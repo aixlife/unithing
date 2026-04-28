@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, type Content, type GenerationConfig, type Generativ
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { checkAiQuota } from '@/lib/aiUsage';
+import { normalizeSegibuAnalysis } from '@/lib/segibuAnalysis';
 import type { AdmissionsReadiness, CompKey, SegibuAnalysis } from '@/types/analysis';
 
 const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를 실제 입학사정관의 관점에서 정밀하게 분석하는 '생기부 분석 전문 AI'입니다.
@@ -318,12 +319,14 @@ function stripJsonFromReport(raw: string): string {
 
 function parseAnalysis(raw: string): SegibuAnalysis {
   const parsed = JSON.parse(extractJsonText(raw)) as Record<string, unknown>;
-  return {
+  const normalized = normalizeSegibuAnalysis({
     ...parsed,
     scores: calibrateScores(parsed.scores),
     admissionsReadiness: normalizeReadiness(parsed.admissionsReadiness),
     report: stripJsonFromReport(raw),
-  } as SegibuAnalysis;
+  });
+  if (!normalized) throw new Error('JSON 파싱 실패 — AI 응답에 분석 데이터가 없습니다.');
+  return normalized;
 }
 
 async function generateAnalysis(model: GenerativeModel, contents: Content[]): Promise<SegibuAnalysis> {

@@ -159,6 +159,16 @@ Deferred from the original apps:
 - 기존 AI 분석 마크다운은 `AI 분석 원문` 탭으로 남겨 원문 확인과 디버깅이 가능하게 했다.
 - 분석 엔진, 저장 스키마, 리포트 표현부가 분리되어 이후 PDF/Markdown/키워드 뷰 유지보수가 쉬워졌다.
 
+## Runtime Hardening Update — 2026-04-28
+
+Vercel 배포본에서 `생기부 분석 > 학생부 심층분석 > 교과 세특 > 수학 > 2학년` 선택 시, 저장된 AI 분석 JSON의 일부 교과/학년 필드가 누락되면 화면이 런타임 오류를 낼 수 있음을 확인했다.
+
+- `src/lib/segibuAnalysis.ts`를 추가해 `SegibuAnalysis` 데이터를 표준 스키마로 보정한다.
+- AI API 응답 생성 시점과 클라이언트의 저장 분석 로드 시점 모두에서 normalization을 적용한다.
+- `structuredData`, `highlights`, `grades`, `summaryHighlights`, `futureStrategy`, `admissionsReadiness`의 누락 필드를 안전한 기본값으로 채운다.
+- 영어 key와 한국어 key alias를 함께 처리해 Gemini 응답이 일부 한국어 key로 흔들려도 화면 접근이 깨지지 않도록 했다.
+- 기존 Supabase 저장 데이터도 재분석 없이 클라이언트 로드 시점에 보정되어 동일한 화면 오류를 피한다.
+
 ## Remaining Phase 1 Checks
 
 - Test the prompt against `service_source/숭신고 생기부.pdf`.
