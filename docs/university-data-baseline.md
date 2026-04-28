@@ -1,6 +1,6 @@
 # University Data Baseline
 
-Updated: 2026-04-27
+Updated: 2026-04-28
 
 ## Current Source And Output
 
@@ -14,6 +14,12 @@ Current integrated JSON:
 
 ```text
 /Users/aixlife/Projects/Campus Mento/UNITHING/src/data/universitiesRaw.json
+```
+
+Checked conversion script:
+
+```text
+/Users/aixlife/Projects/Campus Mento/UNITHING/scripts/build-universities-data.mjs
 ```
 
 Current JSON row count:
@@ -50,7 +56,7 @@ Earlier audit found:
 - Source valid data rows: 16,867
 - Current JSON rows: 16,582
 - Difference: 285
-- Difference is mainly `실기` 202 rows, `논술` 80 rows, and 3 invalid grade outliers.
+- `npm run data:universities -- --check` currently reports `실기` 201 rows, `논술` 80 rows, and 4 invalid grade rows.
 
 This is acceptable for the current counseling MVP, but it must stay explicit because users may otherwise assume every admissions type is included.
 
@@ -80,11 +86,15 @@ Then adds an inferred department category such as `의약`, `공학`, `자연`, 
 
 ## Phase 2 Follow-Up
 
-Phase 2 should add the missing durable pieces:
+Phase 2 added the main durable pieces:
 
 - Checked-in conversion script from the source CSV to `universitiesRaw.json`.
-- Explicit include/exclude options for `교과`, `종합`, `논술`, and `실기`.
-- A visible data-source note in the UI.
+- Explicit include/exclude option via `--include=교과,종합`.
 - Student-specific target college picks: `도전`, `적정`, `안정`.
-- Saved target picks that can feed Phase 3 subject planning and Phase 4 Seteuk planning.
+- Saved target picks under `students.naesin_data.university_picks` for Phase 3 subject planning and Phase 4 Seteuk planning.
 
+Run:
+
+```bash
+npm run data:universities -- --check
+```

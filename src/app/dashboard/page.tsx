@@ -58,7 +58,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 1 && <Service1Grade />}
+      {activeTab === 1 && <Service1Grade onOpenService={setActiveTab} />}
       {activeTab === 2 && <Service2Subject />}
       {activeTab === 3 && <Service3Segibu />}
       {activeTab === 4 && <Service4Seteuk />}

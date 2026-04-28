@@ -3,6 +3,24 @@ import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 
 type Params = Promise<{ id: string }>;
+const ALLOWED_UPDATE_FIELDS = [
+  'name',
+  'grade',
+  'school',
+  'target_dept',
+  'naesin_data',
+  'segibu_pdf_url',
+  'segibu_analysis',
+] as const;
+
+function pickAllowedUpdateFields(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const body = raw as Record<string, unknown>;
+  return ALLOWED_UPDATE_FIELDS.reduce<Record<string, unknown>>((acc, key) => {
+    if (key in body) acc[key] = body[key];
+    return acc;
+  }, {});
+}
 
 export async function PATCH(req: Request, { params }: { params: Params }) {
   const session = await getServerSession(authOptions);
@@ -10,7 +28,11 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
 
   const teacherId = (session.user as { teacherId?: string }).teacherId;
   const { id } = await params;
-  const body = await req.json();
+  const body = pickAllowedUpdateFields(await req.json());
+
+  if (Object.keys(body).length === 0) {
+    return Response.json({ error: 'No valid fields to update' }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from('students')

@@ -2,6 +2,24 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 
+const ALLOWED_CREATE_FIELDS = [
+  'name',
+  'grade',
+  'school',
+  'target_dept',
+  'naesin_data',
+  'segibu_pdf_url',
+] as const;
+
+function pickAllowedCreateFields(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const body = raw as Record<string, unknown>;
+  return ALLOWED_CREATE_FIELDS.reduce<Record<string, unknown>>((acc, key) => {
+    if (key in body) acc[key] = body[key];
+    return acc;
+  }, {});
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -22,7 +40,7 @@ export async function POST(req: Request) {
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const teacherId = (session.user as { teacherId?: string }).teacherId;
-  const body = await req.json();
+  const body = pickAllowedCreateFields(await req.json());
 
   const { data, error } = await supabase
     .from('students')

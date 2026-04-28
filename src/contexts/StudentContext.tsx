@@ -3,12 +3,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, R
 import { Student } from '@/lib/supabase';
 import { SegibuAnalysis } from '@/types/analysis';
 
+type StudentCreate = Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>;
+export type StudentUpdate = Partial<Pick<Student, 'name' | 'grade' | 'school' | 'target_dept' | 'naesin_data' | 'segibu_pdf_url' | 'segibu_analysis'>>;
+
 type StudentContextType = {
   students: Student[];
   currentStudent: Student | null;
   setCurrentStudent: (s: Student | null) => void;
   loadStudents: () => Promise<void>;
-  addStudent: (data: Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>) => Promise<Student | null>;
+  addStudent: (data: StudentCreate) => Promise<Student | null>;
+  updateStudent: (id: string, data: StudentUpdate) => Promise<Student | null>;
   deleteStudent: (id: string) => Promise<void>;
   segibuAnalysis: SegibuAnalysis | null;
   analyzeSegibu: (input: File | string, studentOverride?: Student) => Promise<void>;
@@ -94,7 +98,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addStudent = async (body: Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>) => {
+  const addStudent = async (body: StudentCreate) => {
     const res = await fetch('/api/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -105,6 +109,19 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setStudents(prev => [student, ...prev]);
     setCurrentStudent(student);
     return student;
+  };
+
+  const updateStudent = async (id: string, body: StudentUpdate) => {
+    const res = await fetch(`/api/students/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const updated: Student = await res.json();
+    setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+    if (currentStudent?.id === updated.id) setCurrentStudentState(updated);
+    return updated;
   };
 
   const deleteStudent = async (id: string) => {
@@ -136,7 +153,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
   return (
     <StudentContext.Provider value={{
       students, currentStudent, setCurrentStudent, loadStudents,
-      addStudent, deleteStudent,
+      addStudent, updateStudent, deleteStudent,
       segibuAnalysis, analyzeSegibu, analysisLoading, analysisError,
     }}>
       {children}

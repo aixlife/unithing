@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SegibuAnalysis } from '@/types/analysis';
+import type { NaesinData } from '@/types/student';
 
 export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,7 +14,7 @@ export type Student = {
   grade: string;
   school: string;
   target_dept: string;
-  naesin_data: Record<string, unknown> | null;
+  naesin_data: NaesinData | null;
   segibu_pdf_url: string | null;
   segibu_analysis: SegibuAnalysis | null;
   created_at: string;

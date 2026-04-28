@@ -1,6 +1,6 @@
 # Supabase Schema And RLS Baseline
 
-Updated: 2026-04-27
+Updated: 2026-04-28
 
 ## Current App Usage
 
@@ -44,7 +44,7 @@ Expected columns based on current code:
 | `grade` | `text` | yes | Stored as current app form value. |
 | `school` | `text` | no | Student school. |
 | `target_dept` | `text` | no | Desired major/department. |
-| `naesin_data` | `jsonb` | no | Reserved for grade data. |
+| `naesin_data` | `jsonb` | no | Grade data and Phase 2 university target picks. |
 | `segibu_pdf_url` | `text` | no | Reserved for uploaded student record file URL. |
 | `segibu_analysis` | `jsonb` | no | Service3 structured analysis. |
 | `created_at` | `timestamptz` | yes | Default `now()`. |
@@ -60,6 +60,32 @@ Current code paths:
 - `src/contexts/StudentContext.tsx`
   - Persists Service3 analysis to `students.segibu_analysis`.
   - Restores the current student's analysis after reload.
+  - Persists Phase 2 target picks to `students.naesin_data.university_picks`.
+
+### `students.naesin_data` Current JSON Shape
+
+Phase 2 uses the existing JSONB column to avoid requiring an immediate production migration.
+
+```json
+{
+  "service1": {
+    "grade5": 2,
+    "grade9": 3.267,
+    "conversionVersion": "mixed",
+    "conversionReason": "conversion note",
+    "searchRange": 0.3,
+    "showAmbitious": true,
+    "updatedAt": "2026-04-28T00:00:00.000Z"
+  },
+  "university_picks": {
+    "challenge": {},
+    "fit": {},
+    "safe": {}
+  }
+}
+```
+
+If Phase 6 introduces a dedicated table or column for target picks, this JSON shape is the migration source.
 
 ## Recommended SQL Baseline
 
@@ -115,4 +141,3 @@ For the current MVP baseline:
 - Confirm whether RLS is enabled on `teachers` and `students`.
 - Decide server-only service-role route client vs Supabase Auth RLS integration.
 - Add a checked-in migration once the final policy is chosen.
-

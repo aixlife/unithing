@@ -1,6 +1,19 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { ArrowRight, Save, X } from 'lucide-react';
+import { useStudent } from '@/contexts/StudentContext';
+import type { ReadinessIssue } from '@/types/analysis';
+import {
+  TARGET_PICK_LABELS,
+  TARGET_PICK_SLOTS,
+  getNaesinData,
+  getUniversityPicks,
+  type NaesinData,
+  type TargetPickSlot,
+  type UniversityPicks,
+  type UniversityTargetPick,
+} from '@/types/student';
 
 // ─── 5등급→9등급 환산 데이터 ──────────────────────────────────────────────────
 type ConversionVersion = 'gyeonggi' | 'busan' | 'gwangju' | 'mixed';
@@ -98,11 +111,11 @@ interface UnivResult {
   process: string;
   type: string;
   grade: number;
-  badge: '도전' | '적정' | '안정';
+  badge: BadgeType;
   category: string;
 }
 
-type BadgeType = '도전' | '적정' | '안정';
+type BadgeType = UniversityTargetPick['slotLabel'];
 
 const CATEGORIES = [
   { id: '전체', emoji: '🔍' },
@@ -128,7 +141,169 @@ function getBadgeStyle(badge: BadgeType) {
   return { bg: T.successSoft, color: T.success, stripe: T.success };
 }
 
-function UniversityCard({ univ, myGrade }: { univ: UnivResult; myGrade: number }) {
+function formatGap(gap: number) {
+  if (gap > 0) return `+${gap.toFixed(2)}`;
+  return gap.toFixed(2);
+}
+
+function TargetPicksPanel({
+  studentName,
+  picks,
+  weaknesses,
+  savingSlot,
+  onClear,
+  onOpenService,
+}: {
+  studentName: string | null;
+  picks: UniversityPicks;
+  weaknesses: ReadinessIssue[];
+  savingSlot: TargetPickSlot | null;
+  onClear: (slot: TargetPickSlot) => void;
+  onOpenService?: (serviceId: number) => void;
+}) {
+  const hasAnyPick = TARGET_PICK_SLOTS.some(({ slot }) => picks[slot]);
+
+  return (
+    <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 850, color: T.text }}>목표 대학 3 Picks</div>
+          <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 3 }}>
+            {studentName ? `${studentName} 학생 기준으로 저장됩니다` : '학생을 먼저 선택하면 도전/적정/안정 목표를 저장할 수 있습니다'}
+          </div>
+        </div>
+        {hasAnyPick && (
+          <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>
+            다음 단계: 과목 설계 · 세특 보완
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
+        {TARGET_PICK_SLOTS.map(({ slot, label }) => {
+          const pick = picks[slot];
+          const cfg = getBadgeStyle(label);
+          return (
+            <div
+              key={slot}
+              style={{
+                minHeight: 120,
+                borderRadius: 10,
+                border: `1px solid ${pick ? cfg.stripe : T.border}`,
+                background: pick ? cfg.bg : T.bg,
+                padding: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: cfg.color }}>{label}</span>
+                {pick && (
+                  <button
+                    onClick={() => onClear(slot)}
+                    disabled={savingSlot === slot}
+                    title={`${label} Pick 비우기`}
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      border: `1px solid ${T.border}`,
+                      background: T.surface,
+                      color: T.textSubtle,
+                      cursor: savingSlot === slot ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <X size={13} strokeWidth={2.4} />
+                  </button>
+                )}
+              </div>
+
+              {pick ? (
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 850, color: T.text, lineHeight: 1.25 }}>{pick.name}</div>
+                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4, lineHeight: 1.35 }}>{pick.dept}</div>
+                  <div style={{ fontSize: 11, color: T.textSubtle, marginTop: 6 }}>
+                    입결 {pick.grade.toFixed(2)} · 갭 {formatGap(pick.gradeGap)}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: T.textSubtle, lineHeight: 1.45 }}>
+                  검색 결과에서 {label} 목표를 저장하세요.
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {(weaknesses.length > 0 || hasAnyPick) && (
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 850, color: T.textMuted, marginBottom: 6 }}>생기부 보완 포인트</div>
+            {weaknesses.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {weaknesses.slice(0, 2).map((item, index) => (
+                  <div key={`${item.competency}-${index}`} style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.45 }}>
+                    <strong style={{ color: T.text }}>{item.issue}</strong> — {item.recommendation}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: T.textSubtle }}>생기부 분석을 먼저 실행하면 목표 대학 기준 보완 포인트가 함께 표시됩니다.</div>
+            )}
+          </div>
+          {onOpenService && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => onOpenService(2)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '8px 10px', borderRadius: 8, border: `1px solid ${T.primaryBorder}`,
+                  background: T.primarySoft, color: T.primary, fontSize: 12, fontWeight: 800,
+                  cursor: 'pointer', fontFamily: FONT,
+                }}
+              >
+                과목 설계 <ArrowRight size={13} strokeWidth={2.4} />
+              </button>
+              <button
+                onClick={() => onOpenService(4)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '8px 10px', borderRadius: 8, border: `1px solid ${T.border}`,
+                  background: T.surface, color: T.textMuted, fontSize: 12, fontWeight: 800,
+                  cursor: 'pointer', fontFamily: FONT,
+                }}
+              >
+                세특 보완 <ArrowRight size={13} strokeWidth={2.4} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UniversityCard({
+  univ,
+  myGrade,
+  onSavePick,
+  disabled,
+  savingSlot,
+  savedSlots,
+}: {
+  univ: UnivResult;
+  myGrade: number;
+  onSavePick: (slot: TargetPickSlot, univ: UnivResult) => void;
+  disabled: boolean;
+  savingSlot: TargetPickSlot | null;
+  savedSlots: TargetPickSlot[];
+}) {
   const [hovered, setHovered] = useState(false);
   const cfg = getBadgeStyle(univ.badge);
   const diff = univ.grade - myGrade;
@@ -179,13 +354,47 @@ function UniversityCard({ univ, myGrade }: { univ: UnivResult; myGrade: number }
             </div>
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+          {TARGET_PICK_SLOTS.map(({ slot, label }) => {
+            const pickStyle = getBadgeStyle(label);
+            const isSaved = savedSlots.includes(slot);
+            const isSaving = savingSlot === slot;
+            return (
+              <button
+                key={slot}
+                onClick={() => onSavePick(slot, univ)}
+                disabled={disabled || isSaving}
+                title={`${label} 목표로 저장`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  minHeight: 30,
+                  padding: '6px 9px',
+                  borderRadius: 7,
+                  border: `1px solid ${isSaved ? pickStyle.stripe : T.border}`,
+                  background: isSaved ? pickStyle.bg : T.bg,
+                  color: disabled ? T.textSubtle : pickStyle.color,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  fontFamily: FONT,
+                  cursor: disabled || isSaving ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <Save size={12} strokeWidth={2.4} />
+                {isSaving ? '저장 중' : `${label} 저장`}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function Service1Grade() {
+export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: number) => void }) {
+  const { currentStudent, updateStudent, segibuAnalysis } = useStudent();
   const [gpa5, setGpa5] = useState(2.0);
   const [conversionVersion, setConversionVersion] = useState<ConversionVersion>('mixed');
   const [gradeCounts, setGradeCounts] = useState({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
@@ -200,8 +409,13 @@ export function Service1Grade() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [savingSlot, setSavingSlot] = useState<TargetPickSlot | null>(null);
 
   const conversion = useMemo(() => convertGrade(gpa5, conversionVersion), [gpa5, conversionVersion]);
+  const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
+  const targetPicks = useMemo(() => getUniversityPicks(naesinData), [naesinData]);
+  const readinessWeaknesses = segibuAnalysis?.admissionsReadiness?.criticalWeaknesses ?? [];
 
   const universityList = useMemo(() => {
     const unis = Array.from(new Set(allResults.map(r => r.name))).sort();
@@ -273,6 +487,93 @@ export function Service1Grade() {
     setSearchRange(0.3);
     setShowAmbitious(true);
   };
+
+  const saveTargetPick = useCallback(async (slot: TargetPickSlot, univ: UnivResult) => {
+    setSaveMessage(null);
+    if (!currentStudent) {
+      setSaveMessage('학생을 먼저 선택하거나 등록한 뒤 목표 대학을 저장할 수 있습니다.');
+      return;
+    }
+
+    const savedAt = new Date().toISOString();
+    const pick: UniversityTargetPick = {
+      slot,
+      slotLabel: TARGET_PICK_LABELS[slot],
+      name: univ.name,
+      dept: univ.dept,
+      process: univ.process,
+      type: univ.type,
+      category: univ.category,
+      grade: univ.grade,
+      badge: univ.badge,
+      currentGrade9: conversion.grade9,
+      gradeGap: Number((univ.grade - conversion.grade9).toFixed(3)),
+      source: 'service1-2025-admissions',
+      savedAt,
+    };
+
+    const nextNaesinData: NaesinData = {
+      ...naesinData,
+      service1: {
+        grade5: gpa5,
+        grade9: conversion.grade9,
+        conversionVersion,
+        conversionReason: conversion.reason,
+        searchRange,
+        showAmbitious,
+        updatedAt: savedAt,
+      },
+      university_picks: {
+        ...targetPicks,
+        [slot]: pick,
+      },
+    };
+
+    setSavingSlot(slot);
+    const updated = await updateStudent(currentStudent.id, {
+      target_dept: univ.dept,
+      naesin_data: nextNaesinData,
+    });
+    setSavingSlot(null);
+
+    if (!updated) {
+      setSaveMessage('저장에 실패했습니다. 로그인 상태나 Supabase 연결을 확인해주세요.');
+      return;
+    }
+    setSaveMessage(`${TARGET_PICK_LABELS[slot]} 목표로 ${univ.name} ${univ.dept}을 저장했습니다.`);
+  }, [conversion.grade9, conversion.reason, conversionVersion, currentStudent, gpa5, naesinData, searchRange, showAmbitious, targetPicks, updateStudent]);
+
+  const clearTargetPick = useCallback(async (slot: TargetPickSlot) => {
+    setSaveMessage(null);
+    if (!currentStudent) return;
+
+    const nextPicks: UniversityPicks = { ...targetPicks };
+    delete nextPicks[slot];
+    const savedAt = new Date().toISOString();
+    const nextNaesinData: NaesinData = {
+      ...naesinData,
+      service1: {
+        grade5: gpa5,
+        grade9: conversion.grade9,
+        conversionVersion,
+        conversionReason: conversion.reason,
+        searchRange,
+        showAmbitious,
+        updatedAt: savedAt,
+      },
+      university_picks: nextPicks,
+    };
+
+    setSavingSlot(slot);
+    const updated = await updateStudent(currentStudent.id, { naesin_data: nextNaesinData });
+    setSavingSlot(null);
+
+    if (!updated) {
+      setSaveMessage('목표 대학을 비우지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    setSaveMessage(`${TARGET_PICK_LABELS[slot]} 목표를 비웠습니다.`);
+  }, [conversion.grade9, conversion.reason, conversionVersion, currentStudent, gpa5, naesinData, searchRange, showAmbitious, targetPicks, updateStudent]);
 
   const badgeCounts = {
     도전: filteredResults.filter(r => r.badge === '도전').length,
@@ -478,6 +779,29 @@ export function Service1Grade() {
         </div>
       </div>
 
+      <TargetPicksPanel
+        studentName={currentStudent?.name ?? null}
+        picks={targetPicks}
+        weaknesses={readinessWeaknesses}
+        savingSlot={savingSlot}
+        onClear={clearTargetPick}
+        onOpenService={onOpenService}
+      />
+
+      {saveMessage && (
+        <div style={{
+          background: saveMessage.includes('실패') || saveMessage.includes('먼저') ? '#FEF2F2' : T.successSoft,
+          border: `1px solid ${saveMessage.includes('실패') || saveMessage.includes('먼저') ? '#FECACA' : '#BBF7D0'}`,
+          color: saveMessage.includes('실패') || saveMessage.includes('먼저') ? T.danger : T.success,
+          borderRadius: 10,
+          padding: '10px 14px',
+          fontSize: 13,
+          fontWeight: 700,
+        }}>
+          {saveMessage}
+        </div>
+      )}
+
       {/* ── 필터 + 검색 영역 ── */}
       <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
@@ -650,7 +974,20 @@ export function Service1Grade() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
               {filteredResults.map((univ, i) => (
-                <UniversityCard key={`${univ.name}-${univ.dept}-${i}`} univ={univ} myGrade={conversion.grade9} />
+                <UniversityCard
+                  key={`${univ.name}-${univ.dept}-${i}`}
+                  univ={univ}
+                  myGrade={conversion.grade9}
+                  onSavePick={saveTargetPick}
+                  disabled={!currentStudent}
+                  savingSlot={savingSlot}
+                  savedSlots={TARGET_PICK_SLOTS
+                    .filter(({ slot }) => {
+                      const pick = targetPicks[slot];
+                      return pick?.name === univ.name && pick.dept === univ.dept && pick.process === univ.process;
+                    })
+                    .map(({ slot }) => slot)}
+                />
               ))}
             </div>
           )}

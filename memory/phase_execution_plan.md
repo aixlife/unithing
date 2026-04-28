@@ -2,7 +2,7 @@
 name: UNITHING Phase Execution Plan
 description: 원본 5개 서비스 통합 완료를 위한 실행 순서와 검수 기준
 type: project
-updated: 2026-04-27
+updated: 2026-04-28
 ---
 
 # UNITHING Phase Execution Plan
@@ -145,6 +145,8 @@ updated: 2026-04-27
 
 ## Phase 2 — 대학 찾기/목표 대학 선택 완성
 
+**상태:** 완료 — 2026-04-28
+
 **목표:** Service1을 단순 검색에서 “현재 수준 + 목표 대학 선택” 도구로 발전시킨다.
 
 ### 원본 참조
@@ -158,6 +160,8 @@ updated: 2026-04-27
 ### 작업
 
 - 입결 JSON 생성 스크립트/기준 repo 안에 문서화
+  - `scripts/build-universities-data.mjs`
+  - `npm run data:universities -- --check`
 - 현재 제외된 전형 정책 확정
   - 교과/종합만 유지할지
   - 논술/실기까지 포함할지
@@ -179,6 +183,17 @@ updated: 2026-04-27
 - 학생별 목표 대학 3개를 저장할 수 있음
 - 목표 대학 선택이 Service2/Service4 입력으로 이어짐
 - 데이터 출처와 제외 기준이 화면 또는 문서에서 설명됨
+
+### Phase 2 완료 기록
+
+- Service1 검색 결과 카드에서 `도전`, `적정`, `안정` 목표를 저장할 수 있게 함.
+- 저장 위치는 운영 DB 변경을 피하기 위해 `students.naesin_data.university_picks`로 결정함.
+- Service1 저장 시 `students.target_dept`도 갱신해 Service2/Service4가 바로 이어받게 함.
+- Service1 목표 대학 패널에 생기부 분석의 보완 포인트와 과목/세특 이동 버튼을 연결함.
+- Service2는 현재 학생의 목표 학과 또는 primary pick을 검색어/대학 필터로 prefill함.
+- 학생 PATCH API는 허용 필드만 업데이트하도록 정리함.
+- 입결 CSV -> JSON 생성 스크립트를 추가하고 현재 `universitiesRaw.json` 재현을 확인함.
+- 세부 기록: [Phase 2 University Targets](../docs/phase-2-university-targets.md)
 
 ## Phase 3 — 과목 가이드 전체 데이터화 및 AI 추천
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, Fragment } from 'react';
+import { useEffect, useState, useMemo, useRef, Fragment } from 'react';
 import { jsPDF } from 'jspdf';
 import { toJpeg } from 'html-to-image';
 import {
@@ -9,6 +9,8 @@ import {
 } from '@/data/curriculumData';
 import { UNIVERSITY_TIPS } from '@/data/universityData';
 import { SUBJECT_DETAILS } from '@/data/subjectDetails';
+import { useStudent } from '@/contexts/StudentContext';
+import { getPrimaryTargetPick, getUniversityPicks } from '@/types/student';
 
 const T = {
   primary: '#1B64DA',
@@ -128,6 +130,7 @@ function getGradingType(name: string) {
 }
 
 export function Service2Subject() {
+  const { currentStudent } = useStudent();
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,6 +155,38 @@ export function Service2Subject() {
   const allMajors = useMemo(() => {
     return FIELD_DATA.flatMap(field => field.majors.map(major => ({ ...major, fieldName: field.name })));
   }, []);
+
+  const studentTargetPick = useMemo(() => {
+    return getPrimaryTargetPick(getUniversityPicks(currentStudent?.naesin_data));
+  }, [currentStudent?.naesin_data]);
+
+  const studentTargetDept = useMemo(() => {
+    return currentStudent?.target_dept || studentTargetPick?.dept || '';
+  }, [currentStudent?.target_dept, studentTargetPick]);
+
+  useEffect(() => {
+    if (univSearchTerm.trim() || !studentTargetPick?.name) return;
+    const timeoutId = window.setTimeout(() => {
+      setUnivSearchTerm(studentTargetPick.name);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [studentTargetPick, univSearchTerm]);
+
+  useEffect(() => {
+    if (selectedMajor || searchTerm.trim() || !studentTargetDept) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setSearchTerm(studentTargetDept);
+      const targetKey = normalizeMajorName(studentTargetDept);
+      const matchedField = FIELD_DATA.find(field => field.majors.some(major => normalizeMajorName(major.name) === targetKey));
+      const matchedMajor = matchedField?.majors.find(major => normalizeMajorName(major.name) === targetKey);
+      if (matchedField && matchedMajor) {
+        setSelectedField(matchedField);
+        setSelectedMajor(matchedMajor);
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm, selectedMajor, studentTargetDept]);
 
   const searchResults = useMemo(() => {
     if (!searchTerm.trim()) return [];
