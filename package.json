@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "node node_modules/eslint/bin/eslint.js",
+    "assets:share": "node scripts/generate-share-assets.mjs",
     "data:universities": "node scripts/build-universities-data.mjs",
     "data:subjects": "node scripts/build-recommended-subjects-data.mjs"
   },
