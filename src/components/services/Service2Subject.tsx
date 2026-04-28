@@ -932,7 +932,7 @@ export function Service2Subject() {
                     )}
                     {subjectMatches.length === 0 && !subjectSearchError && (
                       <div style={{ fontSize: 12, color: T.textSubtle, lineHeight: 1.55, background: T.bg, borderRadius: 8, padding: '10px 12px' }}>
-                        Phase 2에서 고른 목표 대학이 있으면 그 값을 기준으로 검색합니다.
+                        대학 찾기에서 저장한 목표 대학 3 Picks와 학생 희망 학과가 있으면 그 값을 자동으로 가져옵니다. 필요하면 위의 대학명·모집단위/학과를 수정한 뒤 대학 자료 검색을 누르세요.
                       </div>
                     )}
                     {subjectMatches.length > 0 && (
