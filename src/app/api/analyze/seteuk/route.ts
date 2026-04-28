@@ -1,4 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import { checkAiQuota } from '@/lib/aiUsage';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -35,6 +38,11 @@ async function gen(prompt: string, system?: string): Promise<string> {
 }
 
 export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  const teacherId = (session?.user as { teacherId?: string } | undefined)?.teacherId;
+  const quota = checkAiQuota('seteuk', teacherId);
+  if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });
+
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action') ?? 'topics';
 
@@ -80,6 +88,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  const teacherId = (session?.user as { teacherId?: string } | undefined)?.teacherId;
+  const quota = checkAiQuota('seteuk', teacherId);
+  if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });
+
   const body = await req.json() as SeteukPostBody;
   const {
     major = '',

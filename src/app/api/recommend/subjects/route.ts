@@ -1,4 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import { checkAiQuota } from '@/lib/aiUsage';
 import type { SubjectRecommendationPlan, UniversitySubjectRecord } from '@/types/subjects';
 
 type SubjectRecommendationRequest = {
@@ -94,10 +97,19 @@ function normalizePlan(value: unknown, fallback: SubjectRecommendationPlan): Sub
 export async function POST(req: Request) {
   const body = await req.json() as SubjectRecommendationRequest;
   const fallback = fallbackPlan(body);
+  const session = await getServerSession(authOptions);
+  const teacherId = (session?.user as { teacherId?: string } | undefined)?.teacherId;
+
+  if (!teacherId) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     return Response.json({ plan: fallback, mode: 'rule-based' });
   }
+
+  const quota = checkAiQuota('subjects', teacherId);
+  if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });
 
   const sourceRows = (body.universityRecords ?? []).slice(0, 8).map((record) => ({
     university: record.university,

@@ -43,6 +43,7 @@ updated: 2026-04-28
 - Service1 목표 대학 → Service2 과목 설계 → Service4 세특 보완 후보 흐름 연결
 - Service4 최종 세특 결과를 학생별 `naesin_data`에 저장하고 복원
 - `상담 로드맵` 탭에서 분석/목표대학/과목/세특 결과를 하나로 묶어 저장·출력
+- 서버 전용 Supabase 클라이언트, AI 라우트 인증/소프트 쿼터, 운영 migration 기준 추가
 - Service5는 Service3 분석 결과를 재사용하는 리포트 화면으로 통합
 - `npm run lint`, `npm run build` 통과
 
@@ -53,7 +54,7 @@ updated: 2026-04-28
 - Service5 원본의 Excel/Markdown 다운로드, 누적 분석, D3 워드클라우드는 축소됨
 - Service3/5 분석 프롬프트는 대학 가이드북 철학을 반영하지만 RAG 방식으로 PDF 원문을 직접 검색하지는 않음
 - 세특 PDF 자료 전체를 RAG/reference snippet으로 검색하는 구조는 아직 없음
-- Supabase schema/RLS 기준은 문서화됐고, 실제 migration 파일은 아직 없음
+- Supabase schema/RLS 기준과 baseline migration은 추가됐지만 production 적용 확인은 아직 필요함
 - Next build workspace root 경고는 `next.config.ts`의 `turbopack.root`로 해소됨
 - Vercel 배포본만 테스트할 경우 localhost OAuth URL 추가는 필요 없음. 로컬 로그인 테스트 때만 필요
 
@@ -363,6 +364,8 @@ updated: 2026-04-28
 
 ## Phase 6 — 운영 안정화 및 배포 관리
 
+**상태:** 완료 — 2026-04-28
+
 **목표:** 실제 무료 공개 운영에 필요한 안전장치를 붙인다.
 
 ### 작업
@@ -385,6 +388,25 @@ updated: 2026-04-28
 - 학교/선생님 대상 무료 공개 전에 개인정보·비용·권한 리스크가 정리됨
 - 배포/환경변수/DB 세팅을 새 환경에서 재현 가능함
 
+### Phase 6 완료 기록
+
+- 서버 라우트용 `supabaseServer` 클라이언트를 추가하고 `SUPABASE_SERVICE_ROLE_KEY`를 우선 사용하도록 함.
+- teacher/student API와 NextAuth teacher upsert/lookup 경로를 `supabaseServer`로 전환함.
+- teacher id가 session에 없으면 학생 API가 401을 반환하도록 보강함.
+- AI API 라우트에 session + teacher id 가드를 추가함.
+- `src/lib/aiUsage.ts`로 KST 일자 기준 teacher별 soft daily quota를 추가함.
+- 기본 quota:
+  - `segibu`: 30/day
+  - `seteuk`: 120/day
+  - `subjects`: 120/day
+- 대시보드 상단에 생기부/PDF/AI 결과 취급 안내 문구를 추가함.
+- `supabase/migrations/20260428_unithing_operational_baseline.sql` baseline migration을 추가함.
+- Supabase/RLS 문서를 Phase 6 결정 기준으로 업데이트함.
+- 개인정보/데이터 취급 문서를 추가함.
+- 세부 기록:
+  - [Phase 6 Operational Readiness](../docs/phase-6-operational-readiness.md)
+  - [Privacy And Data Handling](../docs/privacy-and-data-handling.md)
+
 ## 우선 작업 큐
 
 1. Phase 0 완료
@@ -400,6 +422,8 @@ updated: 2026-04-28
    - 목표 대학/과목 설계를 세특 주제 후보에 반영
 6. Phase 5 완료
    - 상담 로드맵 탭 추가 및 저장/출력 연결
+7. Phase 6 완료
+   - 운영 보안/쿼터/DB migration 기준선 추가
 
 ## 작업 원칙
 

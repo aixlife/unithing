@@ -21,6 +21,20 @@ export default function DashboardPage() {
 
   return (
     <div style={{ fontFamily: "'Pretendard Variable', Pretendard, sans-serif" }}>
+      <div style={{
+        marginBottom: 14,
+        padding: '12px 14px',
+        borderRadius: 10,
+        background: '#F8FAFC',
+        border: '1px solid #E5E8EB',
+        color: '#4E5968',
+        fontSize: 12.5,
+        lineHeight: 1.55,
+        fontWeight: 600,
+      }}>
+        생기부 PDF와 분석 결과는 로그인한 선생님 계정의 학생 데이터에 저장됩니다. 실제 학생 자료는 상담 목적에 필요한 범위에서만 업로드하고, 공유 전 학생 식별 정보와 민감 내용을 다시 확인해 주세요.
+      </div>
+
       {/* Tab navigation */}
       <div className="ut-tabs-scroll" style={{
         display: 'flex', gap: 0,

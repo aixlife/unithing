@@ -4,14 +4,17 @@ Updated: 2026-04-28
 
 ## Current App Usage
 
-The integrated app currently uses Supabase through `src/lib/supabase.ts` with the browser-safe anon key.
+The integrated app uses Supabase in server routes through `src/lib/supabaseServer.ts`.
+
+- Preferred production key: `SUPABASE_SERVICE_ROLE_KEY`
+- Fallback key for local/dev only: `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 The code reads and writes these tables:
 
 - `teachers`
 - `students`
 
-`students.segibu_analysis` stores the structured Service3 analysis used later by Service5.
+`students.segibu_analysis` stores the structured Service3 analysis used later by Service5 and the counseling roadmap.
 
 ## Tables
 
@@ -61,6 +64,8 @@ Current code paths:
   - Persists Service3 analysis to `students.segibu_analysis`.
   - Restores the current student's analysis after reload.
   - Persists Phase 2 target picks to `students.naesin_data.university_picks`.
+  - Persists Phase 4 Seteuk results through `students.naesin_data.seteuk_latest` and `seteuk_records`.
+  - Persists Phase 5 roadmap snapshots through `students.naesin_data.roadmap_latest`.
 
 ### `students.naesin_data` Current JSON Shape
 
@@ -81,11 +86,32 @@ Phase 2 uses the existing JSONB column to avoid requiring an immediate productio
     "challenge": {},
     "fit": {},
     "safe": {}
-  }
+  },
+  "seteuk_latest": {},
+  "seteuk_records": [],
+  "roadmap_latest": {}
 }
 ```
 
-If Phase 6 introduces a dedicated table or column for target picks, this JSON shape is the migration source.
+If a future phase introduces dedicated tables for target picks, Seteuk results, or roadmaps, this JSON shape is the migration source.
+
+## Checked-In Migration
+
+Baseline SQL:
+
+```text
+supabase/migrations/20260428_unithing_operational_baseline.sql
+```
+
+This migration:
+
+- creates `teachers` and `students`
+- creates the `students_teacher_created_idx` index
+- documents JSONB columns with comments
+- enables RLS
+- blocks direct anon access to `teachers` and `students`
+
+Because the app uses NextAuth rather than Supabase Auth, production server routes should use `SUPABASE_SERVICE_ROLE_KEY` and enforce teacher isolation in route code.
 
 ## Recommended SQL Baseline
 
@@ -120,24 +146,28 @@ create index if not exists students_teacher_created_idx
 
 The current app does teacher isolation in server routes by filtering `teacher_id` from the NextAuth session.
 
-That protects normal app access, but it is not a complete database-level policy unless Supabase RLS is also configured. Because the current Supabase client uses `NEXT_PUBLIC_SUPABASE_ANON_KEY`, Phase 0 production hardening should confirm one of these two setups:
+That protects normal app access. Since NextAuth Google sessions are not automatically Supabase Auth users, RLS cannot identify the teacher unless a custom Supabase Auth mapping is deliberately added.
 
-1. RLS policies exist and correctly restrict `students` by the signed-in database identity.
-2. Server routes use a server-side Supabase key and keep the anon key away from privileged writes.
+Phase 6 chooses the server-route model:
 
-The current code is closer to option 1 in naming, but NextAuth Google sessions are not automatically Supabase Auth users. So do not assume RLS can identify the teacher unless that mapping has been deliberately configured in Supabase.
+1. Browser calls Next.js API routes.
+2. API routes read the NextAuth session and `teacherId`.
+3. API routes use `supabaseServer`.
+4. Query/update/delete operations still filter by `teacher_id`.
+5. Direct anon access is blocked by RLS policies.
 
-## Phase 0 Decision
+## Phase 6 Decision
 
-For the current MVP baseline:
+For the current production hardening baseline:
 
 - Keep route-level `teacher_id` filtering as the app-level protection.
-- Before broader use, add a server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` for server route writes, or move auth fully onto Supabase Auth so RLS can enforce teacher separation.
+- Use `SUPABASE_SERVICE_ROLE_KEY` in server routes when available.
+- Keep the anon fallback only so local/dev environments do not break before the service-role key is configured.
 - Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code or `NEXT_PUBLIC_*`.
 
 ## Open Items Before Production Use
 
-- Confirm actual Supabase table schema matches this document.
-- Confirm whether RLS is enabled on `teachers` and `students`.
-- Decide server-only service-role route client vs Supabase Auth RLS integration.
-- Add a checked-in migration once the final policy is chosen.
+- Apply the checked-in migration to the production Supabase project or confirm the existing schema matches it.
+- Add `SUPABASE_SERVICE_ROLE_KEY` to Vercel production/preview environments.
+- Confirm RLS is enabled on `teachers` and `students`.
+- Remove anon fallback after production service-role configuration is confirmed.

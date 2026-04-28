@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { supabase } from '@/lib/supabase';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 const ALLOWED_CREATE_FIELDS = [
   'name',
@@ -25,7 +25,8 @@ export async function GET() {
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const teacherId = (session.user as { teacherId?: string }).teacherId;
-  const { data, error } = await supabase
+  if (!teacherId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  const { data, error } = await supabaseServer
     .from('students')
     .select('*')
     .eq('teacher_id', teacherId)
@@ -40,9 +41,10 @@ export async function POST(req: Request) {
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const teacherId = (session.user as { teacherId?: string }).teacherId;
+  if (!teacherId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   const body = pickAllowedCreateFields(await req.json());
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from('students')
     .insert({ ...body, teacher_id: teacherId })
     .select()

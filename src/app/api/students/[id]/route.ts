@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { supabase } from '@/lib/supabase';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 type Params = Promise<{ id: string }>;
 const ALLOWED_UPDATE_FIELDS = [
@@ -27,6 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const teacherId = (session.user as { teacherId?: string }).teacherId;
+  if (!teacherId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   const body = pickAllowedUpdateFields(await req.json());
 
@@ -34,7 +35,7 @@ export async function PATCH(req: Request, { params }: { params: Params }) {
     return Response.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from('students')
     .update(body)
     .eq('id', id)
@@ -51,9 +52,10 @@ export async function DELETE(_req: Request, { params }: { params: Params }) {
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const teacherId = (session.user as { teacherId?: string }).teacherId;
+  if (!teacherId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  const { error } = await supabase
+  const { error } = await supabaseServer
     .from('students')
     .delete()
     .eq('id', id)

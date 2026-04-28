@@ -1,6 +1,6 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-import { supabase } from './supabase';
+import { supabaseServer } from './supabaseServer';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -13,7 +13,7 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       if (!user.email) return false;
       // 선생님 upsert
-      await supabase.from('teachers').upsert(
+      await supabaseServer.from('teachers').upsert(
         { email: user.email, name: user.name ?? '' },
         { onConflict: 'email' }
       );
@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session }) {
       if (session.user?.email) {
-        const { data } = await supabase
+        const { data } = await supabaseServer
           .from('teachers')
           .select('id')
           .eq('email', session.user.email)

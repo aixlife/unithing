@@ -1,4 +1,7 @@
 import { GoogleGenerativeAI, type Content, type GenerationConfig, type GenerativeModel } from '@google/generative-ai';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import { checkAiQuota } from '@/lib/aiUsage';
 import type { AdmissionsReadiness, CompKey, SegibuAnalysis } from '@/types/analysis';
 
 const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를 실제 입학사정관의 관점에서 정밀하게 분석하는 '생기부 분석 전문 AI'입니다.
@@ -359,6 +362,11 @@ function getErrorDetail(error: unknown): string {
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    const teacherId = (session?.user as { teacherId?: string } | undefined)?.teacherId;
+    const quota = checkAiQuota('segibu', teacherId);
+    if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });
+
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = genAI.getGenerativeModel({
       model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
