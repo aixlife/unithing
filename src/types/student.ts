@@ -65,11 +65,24 @@ export type SeteukRecord = {
   context: SeteukResultContext;
 };
 
+export type RoadmapSnapshot = {
+  id: string;
+  savedAt: string;
+  studentName: string;
+  targetDept: string;
+  analysisSummary: string;
+  targetSummary: string;
+  subjectSummary: string;
+  seteukSummary: string;
+  nextChecklist: string[];
+};
+
 export type NaesinData = Record<string, unknown> & {
   service1?: Service1Snapshot;
   university_picks?: UniversityPicks;
   seteuk_records?: SeteukRecord[];
   seteuk_latest?: SeteukRecord;
+  roadmap_latest?: RoadmapSnapshot;
 };
 
 export const TARGET_PICK_SLOTS: { slot: TargetPickSlot; label: TargetPickLabel }[] = [
@@ -144,6 +157,21 @@ function isSeteukRecord(value: unknown): value is SeteukRecord {
   );
 }
 
+function isRoadmapSnapshot(value: unknown): value is RoadmapSnapshot {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.savedAt === 'string' &&
+    typeof value.studentName === 'string' &&
+    typeof value.targetDept === 'string' &&
+    typeof value.analysisSummary === 'string' &&
+    typeof value.targetSummary === 'string' &&
+    typeof value.subjectSummary === 'string' &&
+    typeof value.seteukSummary === 'string' &&
+    isStringArray(value.nextChecklist)
+  );
+}
+
 export function getNaesinData(raw: unknown): NaesinData {
   return isRecord(raw) ? { ...raw } : {};
 }
@@ -177,4 +205,9 @@ export function getLatestSeteukRecord(raw: unknown): SeteukRecord | null {
   const latest = getNaesinData(raw).seteuk_latest;
   if (isSeteukRecord(latest)) return latest;
   return getSeteukRecords(raw)[0] ?? null;
+}
+
+export function getLatestRoadmapSnapshot(raw: unknown): RoadmapSnapshot | null {
+  const latest = getNaesinData(raw).roadmap_latest;
+  return isRoadmapSnapshot(latest) ? latest : null;
 }
