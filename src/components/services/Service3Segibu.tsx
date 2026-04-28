@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 import { SegibuAnalysis, GradeMatrix, CategoryGrades } from '@/types/analysis';
+import { StudentReportView } from '@/components/services/StudentReportView';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -630,7 +631,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export function Service3Segibu() {
   const { segibuAnalysis, analyzeSegibu, analysisLoading, analysisError, currentStudent } = useStudent();
-  const [tab, setTab] = useState<'report' | 'grades' | 'activities'>('report');
+  const [tab, setTab] = useState<'summary' | 'report' | 'grades' | 'activities'>('summary');
   const [activityCategory, setActivityCategory] = useState<'individual' | 'club' | 'career_act'>('individual');
   const [curriculumKey, setCurriculumKey] = useState<'korean' | 'math' | 'english' | 'social' | 'science' | 'liberal' | 'arts_phys'>('korean');
   const [yearTab, setYearTab] = useState<'y1' | 'y2' | 'y3'>('y1');
@@ -735,7 +736,7 @@ export function Service3Segibu() {
 
       {/* 탭 */}
       <div style={{ display: 'flex', borderBottom: `2px solid ${T.border}`, gap: 0 }}>
-        {([['report', '학생부 리포트'], ['grades', '성적 분석'], ['activities', '학생부 심층분석']] as const).map(([k, l]) => (
+        {([['summary', '통합 리포트'], ['report', 'AI 분석 원문'], ['grades', '성적 분석'], ['activities', '학생부 심층분석']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             padding: '10px 20px', fontSize: 15, fontWeight: tab === k ? 700 : 500,
             color: tab === k ? T.primary : T.textMuted,
@@ -747,6 +748,14 @@ export function Service3Segibu() {
       </div>
 
       {/* 탭 콘텐츠 */}
+      {tab === 'summary' && (
+        <StudentReportView
+          segibuAnalysis={r}
+          studentName={currentStudent?.name}
+          embedded
+        />
+      )}
+
       {tab === 'report' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
           {readiness && <ReadinessSummary readiness={readiness} />}

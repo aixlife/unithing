@@ -4,7 +4,6 @@ import { Service1Grade } from '@/components/services/Service1Grade';
 import { Service2Subject } from '@/components/services/Service2Subject';
 import { Service3Segibu } from '@/components/services/Service3Segibu';
 import { Service4Seteuk } from '@/components/services/Service4Seteuk';
-import { Service5Haksaengbu } from '@/components/services/Service5Haksaengbu';
 import { Service6Roadmap } from '@/components/services/Service6Roadmap';
 
 const TABS = [
@@ -12,7 +11,6 @@ const TABS = [
   { id: 1, label: '대학 찾기' },
   { id: 2, label: '과목 가이드' },
   { id: 4, label: '세특 도우미' },
-  { id: 5, label: '학생부 리포트' },
   { id: 6, label: '상담 로드맵' },
 ] as const;
 
@@ -78,7 +76,6 @@ export default function DashboardPage() {
       {activeTab === 2 && <Service2Subject />}
       {activeTab === 3 && <Service3Segibu />}
       {activeTab === 4 && <Service4Seteuk />}
-      {activeTab === 5 && <Service5Haksaengbu />}
       {activeTab === 6 && <Service6Roadmap onOpenService={setActiveTab} />}
     </div>
   );

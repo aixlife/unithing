@@ -14,7 +14,7 @@ The code reads and writes these tables:
 - `teachers`
 - `students`
 
-`students.segibu_analysis` stores the structured Service3 analysis used later by Service5 and the counseling roadmap.
+`students.segibu_analysis` stores the structured Service3 analysis used by the integrated report view and the counseling roadmap.
 
 ## Tables
 

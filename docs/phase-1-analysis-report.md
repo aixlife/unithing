@@ -4,14 +4,14 @@ Updated: 2026-04-27
 
 ## Purpose
 
-Phase 1 connects Service3 and Service5 as one student-record analysis flow.
+Phase 1 connects student-record analysis and student-report viewing as one student-record analysis flow.
 
 The intended counseling flow is:
 
 ```text
 Service3 생기부 분석
 -> structured analysis saved to students.segibu_analysis
--> Service5 reads the same analysis
+-> integrated report view reads the same analysis
 -> teacher sees current level, evidence, weaknesses, next actions
 ```
 
@@ -129,22 +129,35 @@ The Service3 API now parses AI output more defensively:
 
 Service3:
 
-- Continues to show the detailed markdown report, score cards, grade matrix, and activity tabs.
+- Owns the visible dashboard tab: `생기부 분석`.
+- Shows upload/analysis, integrated report, AI markdown source, grade matrix, and activity tabs.
 - Shows `admissionsReadiness` as a “상담 처방 요약” card when available.
+- Uses `src/components/services/StudentReportView.tsx` for the integrated report view.
 
-Service5:
+Student report view:
 
-- Continues to read the same `students.segibu_analysis` data.
+- Reads the same `students.segibu_analysis` data.
 - Shows the same counseling prescription in the overview tab.
 - Includes all structured record text, strategy text, and weakness/recommendation text in the keyword cloud input.
 - Keeps PDF export.
-- Restores Markdown export for 상담 공유/보관.
+- Keeps Markdown export for 상담 공유/보관.
+- Remains available as a wrapper component for compatibility, but is no longer an independent dashboard tab.
 
 Deferred from the original apps:
 
 - Excel export
 - D3 word cloud
 - cumulative multi-student analysis
+
+## Integration Update — 2026-04-28
+
+김강석 선생님 의견에 따라 `생기부 분석`과 `학생부 리포트`를 사용자 화면에서 통합했다.
+
+- Dashboard에서 독립 `학생부 리포트` 탭을 제거했다.
+- `Service5Haksaengbu`의 리포트 표현부를 `src/components/services/StudentReportView.tsx`로 분리했다.
+- `Service3Segibu`의 첫 내부 탭을 `통합 리포트`로 바꾸고 `StudentReportView`를 embedded mode로 렌더링한다.
+- 기존 AI 분석 마크다운은 `AI 분석 원문` 탭으로 남겨 원문 확인과 디버깅이 가능하게 했다.
+- 분석 엔진, 저장 스키마, 리포트 표현부가 분리되어 이후 PDF/Markdown/키워드 뷰 유지보수가 쉬워졌다.
 
 ## Remaining Phase 1 Checks
 

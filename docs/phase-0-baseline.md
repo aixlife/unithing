@@ -11,7 +11,7 @@ The product baseline is:
 1. Teacher signs in with Google.
 2. Teacher creates or selects a student.
 3. Teacher analyzes a student record in Service3.
-4. Service5 reads the same analysis and shows the report.
+4. The integrated report inside Service3 reads the same analysis and shows the report.
 5. Service1 searches universities from the current admissions JSON.
 6. Service4 generates a Seteuk plan from student, major, subject, and interest context.
 
@@ -96,7 +96,7 @@ Run this manually on the deployed Vercel URL after confirming the Google OAuth c
 6. Run Service3 with either a sample PDF or pasted student-record text.
 7. Confirm `students.segibu_analysis` is updated.
 8. Refresh the page and confirm the selected student's analysis is restored.
-9. Open Service5 and confirm the report uses the same analysis.
+9. Open the `통합 리포트` tab inside Service3 and confirm the report uses the same analysis.
 10. Run Service1 with a sample grade and confirm university results load.
 11. Run Service4 through final generation with the same student context.
 
@@ -106,6 +106,6 @@ Phase 0 is complete as of 2026-04-27. Google login was manually confirmed, and t
 
 - Kakao login is not wired as a provider.
 - Service2 uses the original curated static data, not the full 2028 recommended-subject CSV.
-- Service3 and Service5 use prompt-based guidebook philosophy, not PDF RAG.
-- Service5 is a simplified report, not the full original export/cumulative-analysis app.
+- Service3 and the integrated report view use prompt-based guidebook philosophy, not PDF RAG.
+- The integrated report is simplified compared with the full original export/cumulative-analysis app.
 - Service1 currently includes only `교과` and `종합` admissions rows in `universitiesRaw.json`.

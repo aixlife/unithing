@@ -44,15 +44,15 @@ updated: 2026-04-28
 - Service4 최종 세특 결과를 학생별 `naesin_data`에 저장하고 복원
 - `상담 로드맵` 탭에서 분석/목표대학/과목/세특 결과를 하나로 묶어 저장·출력
 - 서버 전용 Supabase 클라이언트, AI 라우트 인증/소프트 쿼터, 운영 migration 기준 추가
-- Service5는 Service3 분석 결과를 재사용하는 리포트 화면으로 통합
+- `생기부 분석` 탭 안에 학생부 종합 리포트 화면을 통합
 - `npm run lint`, `npm run build` 통과
 
 ### 주의할 현재 한계
 
 - 카카오 로그인은 버튼만 있고 provider 미연동
 - Service2의 교육과정 PDF AI 파싱 기능은 remix 버전에 있었고 현재 통합본에는 없음
-- Service5 원본의 Excel/Markdown 다운로드, 누적 분석, D3 워드클라우드는 축소됨
-- Service3/5 분석 프롬프트는 대학 가이드북 철학을 반영하지만 RAG 방식으로 PDF 원문을 직접 검색하지는 않음
+- 원본 학생부 리포트 앱의 Excel 다운로드, 누적 분석, D3 워드클라우드는 축소됨
+- 생기부 분석 프롬프트는 대학 가이드북 철학을 반영하지만 RAG 방식으로 PDF 원문을 직접 검색하지는 않음
 - 세특 PDF 자료 전체를 RAG/reference snippet으로 검색하는 구조는 아직 없음
 - Supabase schema/RLS 기준과 baseline migration은 추가됐지만 production 적용 확인은 아직 필요함
 - Next build workspace root 경고는 `next.config.ts`의 `turbopack.root`로 해소됨
@@ -91,7 +91,7 @@ updated: 2026-04-28
   - 로그인
   - 학생 등록
   - 생기부 PDF 또는 텍스트 분석
-  - 학생부 리포트 확인
+  - 생기부 분석 내부 통합 리포트 확인
   - 대학 찾기 검색
   - 세특 도우미 최종 생성
 
@@ -106,7 +106,7 @@ updated: 2026-04-28
 
 **상태:** 완료 — 2026-04-27
 
-**목표:** Service3와 Service5를 하나의 분석 엔진과 상담 리포트로 정리한다.
+**목표:** 생기부 분석 엔진과 학생부 상담 리포트를 하나의 화면 흐름으로 정리한다.
 
 ### 원본 참조
 
@@ -126,8 +126,8 @@ updated: 2026-04-28
   - 창체/교과/행특 구조화
   - 강점/보완점
   - 향후 전략
-- Service5를 “Mock”이 아닌 “Service3 결과 기반 비판적 리포트”로 명확히 정리
-- 원본 Service5에서 유지할 기능 결정
+- 학생부 리포트를 “Mock”이 아닌 “Service3 결과 기반 비판적 리포트”로 명확히 정리
+- 원본 학생부 리포트 앱에서 유지할 기능 결정
   - PDF 저장: 유지
   - Excel 다운로드: 필요 여부 결정 후 이식
   - Markdown 다운로드: 필요 여부 결정 후 이식
@@ -144,7 +144,7 @@ updated: 2026-04-28
 ### 완료 기준
 
 - `숭신고 생기부.pdf` 기준으로 분석 결과가 안정적으로 생성됨
-- Service3와 Service5가 같은 학생 분석 결과를 일관되게 보여줌
+- 생기부 분석과 학생부 리포트가 같은 학생 분석 결과를 일관되게 보여줌
 - 리포트에서 “현재 수준”과 “보완 방향”이 명확히 보임
 
 ## Phase 2 — 대학 찾기/목표 대학 선택 완성
@@ -406,6 +406,21 @@ updated: 2026-04-28
 - 세부 기록:
   - [Phase 6 Operational Readiness](../docs/phase-6-operational-readiness.md)
   - [Privacy And Data Handling](../docs/privacy-and-data-handling.md)
+
+## Post-Phase Update — 생기부 분석/학생부 리포트 화면 통합
+
+**상태:** 완료 — 2026-04-28
+
+**목표:** 김강석 선생님 의견에 따라 `생기부 분석`과 `학생부 리포트`를 하나의 유지보수 가능한 화면 구조로 통합한다.
+
+### 완료 기록
+
+- Dashboard의 독립 `학생부 리포트` 탭을 제거함.
+- `Service5Haksaengbu`의 리포트 표현부를 `src/components/services/StudentReportView.tsx`로 분리함.
+- `Service3Segibu`의 기본 내부 탭을 `통합 리포트`로 바꾸고 `StudentReportView`를 embedded mode로 렌더링함.
+- 기존 AI 마크다운 결과는 `AI 분석 원문` 탭으로 남김.
+- `Service5Haksaengbu` wrapper는 기존 import 호환용으로 유지함.
+- 문서 `docs/phase-1-analysis-report.md`와 기준선 문서를 현재 구조에 맞게 업데이트함.
 
 ## 우선 작업 큐
 
