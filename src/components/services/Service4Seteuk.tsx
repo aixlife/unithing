@@ -1,6 +1,15 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
+import {
+  getNaesinData,
+  getPrimaryTargetPick,
+  getSeteukRecords,
+  getUniversityPicks,
+} from '@/types/student';
+import type { ReadinessIssue } from '@/types/analysis';
+import type { SeteukPlanItem, SeteukRecord, UniversityTargetPick } from '@/types/student';
+import type { UniversitySubjectRecord } from '@/types/subjects';
 
 const T = {
   primary: '#1B64DA', primarySoft: '#EBF2FF', primaryBorder: '#CFDFFB',
@@ -22,13 +31,7 @@ interface TopicItem { title: string; description: string }
 interface MotivationItem { type: string; content: string }
 interface CompetencyItem { name: string; behavior: string }
 interface FollowUpItem { type: string; content: string }
-interface PlanStep { step: string; title: string; description: string }
-interface PlanItem {
-  category: string;
-  content?: string;
-  isStepByStep?: boolean;
-  steps?: PlanStep[];
-}
+type PlanItem = SeteukPlanItem;
 
 const PHASES = [
   { id: 1, label: '기본 정보 입력' },
@@ -80,6 +83,104 @@ type SavedSeteukData = {
   draft?: string;
   plan?: { plan: PlanItem[] };
 };
+
+type SeteukSuggestion = {
+  id: string;
+  title: string;
+  weakness: string;
+  recommendation: string;
+  interest: string;
+  activities: string;
+};
+
+const COMPETENCY_LABELS: Record<ReadinessIssue['competency'], string> = {
+  academic: '학업역량',
+  career: '진로역량',
+  community: '공동체역량',
+};
+
+function uniq(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function truncateText(value: string, max = 74) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > max ? `${normalized.slice(0, max)}...` : normalized;
+}
+
+function getStorageKeys(studentId?: string) {
+  const suffix = studentId ? `_${studentId}` : '';
+  return {
+    data: `${LS_DATA}${suffix}`,
+    phase: `${LS_PHASE}${suffix}`,
+  };
+}
+
+function createRecordId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `seteuk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getTargetLabel(targetPick: UniversityTargetPick | null, fallbackDept: string) {
+  const dept = targetPick?.dept || fallbackDept;
+  return [targetPick?.name, dept].filter(Boolean).join(' ');
+}
+
+function collectSubjectHints(records: UniversitySubjectRecord[]) {
+  return uniq(records.flatMap((record) => [
+    ...record.coreSubjects,
+    ...record.recommendedSubjects,
+  ])).slice(0, 8);
+}
+
+function buildRemediationSuggestions(
+  weaknesses: ReadinessIssue[],
+  targetPick: UniversityTargetPick | null,
+  fallbackDept: string,
+  subjectHints: string[],
+) {
+  const target = getTargetLabel(targetPick, fallbackDept);
+  const subjectText = subjectHints.slice(0, 5).join(', ');
+
+  if (weaknesses.length === 0) {
+    if (!target && subjectHints.length === 0) return [];
+    return [{
+      id: 'target-based',
+      title: '목표 학과 연계 탐구',
+      weakness: target ? `${target} 지원 맥락을 세특 활동으로 보강` : '목표 학과 맥락 보강',
+      recommendation: subjectText ? `권장과목 ${subjectText}와 연결되는 교과 탐구를 설계` : '목표 학과와 연결되는 교과 탐구를 설계',
+      interest: target ? `${target}와 연결되는 교과 개념을 실제 문제에 적용하는 탐구` : '목표 학과와 연결되는 교과 개념을 실제 문제에 적용하는 탐구',
+      activities: [
+        target ? `목표 대학/학과: ${target}` : '',
+        subjectText ? `연계 과목: ${subjectText}` : '',
+        '활동 방향: 수업 개념에서 출발해 질문, 자료 분석, 후속 탐구로 이어지는 세특 근거 만들기',
+      ].filter(Boolean).join('\n'),
+    }];
+  }
+
+  return weaknesses.slice(0, 3).map((item, index) => {
+    const label = COMPETENCY_LABELS[item.competency];
+    return {
+      id: `${item.competency}-${index}`,
+      title: `${label} 보완 탐구`,
+      weakness: item.issue,
+      recommendation: item.recommendation,
+      interest: `${item.issue}\n${item.recommendation}`,
+      activities: [
+        target ? `목표 대학/학과: ${target}` : '',
+        subjectText ? `연계 과목: ${subjectText}` : '',
+        `생기부 근거: ${item.evidence}`,
+        `보완 방향: ${item.recommendation}`,
+      ].filter(Boolean).join('\n'),
+    };
+  });
+}
+
+function buildOneLineFeedback(topic: string, weaknesses: ReadinessIssue[]) {
+  const weakness = weaknesses[0]?.issue;
+  if (weakness) return `${topic} 활동으로 "${truncateText(weakness, 48)}" 보완 근거를 만드는 세특 초안입니다.`;
+  return `${topic} 활동을 목표 학과와 연결해 탐구 과정과 후속 성장을 보여주는 세특 초안입니다.`;
+}
 
 // ─── Input helpers ────────────────────────────────────────────────────────────
 function inputStyle(focused: boolean) {
@@ -211,6 +312,100 @@ function TipsSection({ phase }: { phase: Phase }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function RemediationPanel({
+  suggestions,
+  onApplySuggestion,
+  savedRecords,
+  onLoadRecord,
+  targetLabel,
+  subjectHints,
+}: {
+  suggestions: SeteukSuggestion[];
+  onApplySuggestion: (suggestion: SeteukSuggestion) => void;
+  savedRecords: SeteukRecord[];
+  onLoadRecord: (record: SeteukRecord) => void;
+  targetLabel: string;
+  subjectHints: string[];
+}) {
+  if (suggestions.length === 0 && savedRecords.length === 0 && !targetLabel && subjectHints.length === 0) return null;
+
+  return (
+    <SectionCard style={{ marginBottom: 16, padding: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: T.text, fontFamily: FONT }}>생기부 보완 맥락</h3>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: T.textMuted, lineHeight: 1.5, fontFamily: FONT }}>
+            목표와 분석 결과를 세특 입력으로 이어받았습니다.
+          </p>
+        </div>
+        {(targetLabel || subjectHints.length > 0) && (
+          <div style={{ minWidth: 220, textAlign: 'right' }}>
+            {targetLabel && <div style={{ fontSize: 13, fontWeight: 700, color: T.indigo, fontFamily: FONT }}>{targetLabel}</div>}
+            {subjectHints.length > 0 && (
+              <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 4, lineHeight: 1.5, fontFamily: FONT }}>
+                {subjectHints.slice(0, 5).join(', ')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {suggestions.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: savedRecords.length > 0 ? 18 : 0 }}>
+          {suggestions.map((suggestion) => (
+            <div key={suggestion.id} style={{ border: `1px solid ${T.indigoBorder}`, background: T.indigoSoft, borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.indigo, marginBottom: 6, fontFamily: FONT }}>{suggestion.title}</div>
+              <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.55, fontFamily: FONT, minHeight: 56 }}>
+                {truncateText(suggestion.weakness, 92)}
+              </div>
+              <button
+                onClick={() => onApplySuggestion(suggestion)}
+                style={{
+                  width: '100%', height: 36, marginTop: 12, borderRadius: 8,
+                  border: `1px solid ${T.indigo}`, background: T.surface, color: T.indigo,
+                  fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT,
+                }}
+              >
+                입력에 적용
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {savedRecords.length > 0 && (
+        <div style={{ borderTop: suggestions.length > 0 ? `1px solid ${T.border}` : 'none', paddingTop: suggestions.length > 0 ? 16 : 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.textMuted, marginBottom: 10, fontFamily: FONT }}>저장된 세특 결과</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {savedRecords.slice(0, 3).map((record) => (
+              <div key={record.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 12px', borderRadius: 10, border: `1px solid ${T.border}`, background: T.surfaceAlt }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {record.selectedTopic || record.major}
+                  </div>
+                  <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 2, fontFamily: FONT }}>
+                    {new Date(record.savedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onLoadRecord(record)}
+                  style={{
+                    height: 32, padding: '0 12px', borderRadius: 8,
+                    border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted,
+                    fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: FONT, flexShrink: 0,
+                  }}
+                >
+                  불러오기
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -657,7 +852,7 @@ function Phase6({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function Service4Seteuk() {
-  const { currentStudent } = useStudent();
+  const { currentStudent, updateStudent, segibuAnalysis } = useStudent();
   const [phase, setPhase] = useState<Phase>(1);
 
   const [major, setMajor] = useState('');
@@ -684,14 +879,44 @@ export function Service4Seteuk() {
   const [plan, setPlan] = useState<{ plan: PlanItem[] } | null>(null);
   const [finalLoading, setFinalLoading] = useState(false);
   const [finalError, setFinalError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [subjectHints, setSubjectHints] = useState<string[]>([]);
   const restoredRef = useRef(false);
-  const effectiveMajor = major || currentStudent?.target_dept || '';
 
-  // Load from localStorage
+  const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
+  const targetPick = useMemo(() => getPrimaryTargetPick(getUniversityPicks(naesinData)), [naesinData]);
+  const savedSeteukRecords = useMemo(() => getSeteukRecords(naesinData), [naesinData]);
+  const readinessWeaknesses = useMemo(() => segibuAnalysis?.admissionsReadiness?.criticalWeaknesses ?? [], [segibuAnalysis]);
+  const effectiveMajor = major || currentStudent?.target_dept || '';
+  const targetLabel = useMemo(() => getTargetLabel(targetPick, currentStudent?.target_dept ?? ''), [currentStudent?.target_dept, targetPick]);
+  const remediationSuggestions = useMemo(() => (
+    buildRemediationSuggestions(readinessWeaknesses, targetPick, currentStudent?.target_dept ?? '', subjectHints)
+  ), [currentStudent?.target_dept, readinessWeaknesses, subjectHints, targetPick]);
+  const storageKeys = useMemo(() => getStorageKeys(currentStudent?.id), [currentStudent?.id]);
+
+  // Load from per-student localStorage
   useEffect(() => {
+    restoredRef.current = false;
     const timer = window.setTimeout(() => {
-      const saved = localStorage.getItem(LS_DATA);
-      const savedPhase = localStorage.getItem(LS_PHASE);
+      setPhase(1);
+      setMajor('');
+      setInterest('');
+      setActivities('');
+      setTopics([]);
+      setSelectedTopic('');
+      setMotivations([]);
+      setSelectedMotivation('');
+      setCompetencies([]);
+      setSelectedCompetencies([]);
+      setFollowUps([]);
+      setSelectedFollowUp('');
+      setDraft('');
+      setPlan(null);
+      setFinalError(null);
+      setSaveMessage(null);
+
+      const saved = localStorage.getItem(storageKeys.data);
+      const savedPhase = localStorage.getItem(storageKeys.phase);
       if (saved) {
         try {
           const d = JSON.parse(saved) as SavedSeteukData;
@@ -710,16 +935,19 @@ export function Service4Seteuk() {
           if (d.plan) setPlan(d.plan);
         } catch { /* ignore */ }
       }
-      if (savedPhase) setPhase(parseInt(savedPhase) as Phase);
+      if (savedPhase) {
+        const nextPhase = Number(savedPhase);
+        if (nextPhase >= 1 && nextPhase <= 6) setPhase(nextPhase as Phase);
+      }
       restoredRef.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [storageKeys]);
 
-  // Save to localStorage
+  // Save to per-student localStorage
   useEffect(() => {
     if (!restoredRef.current) return;
-    localStorage.setItem(LS_DATA, JSON.stringify({
+    localStorage.setItem(storageKeys.data, JSON.stringify({
       major: effectiveMajor, interest, activities,
       topics, selectedTopic,
       motivations, selectedMotivation,
@@ -727,8 +955,35 @@ export function Service4Seteuk() {
       followUps, selectedFollowUp,
       draft, plan,
     }));
-    localStorage.setItem(LS_PHASE, phase.toString());
-  }, [effectiveMajor, interest, activities, topics, selectedTopic, motivations, selectedMotivation, competencies, selectedCompetencies, followUps, selectedFollowUp, draft, plan, phase]);
+    localStorage.setItem(storageKeys.phase, phase.toString());
+  }, [effectiveMajor, interest, activities, topics, selectedTopic, motivations, selectedMotivation, competencies, selectedCompetencies, followUps, selectedFollowUp, draft, plan, phase, storageKeys]);
+
+  useEffect(() => {
+    const university = targetPick?.name ?? '';
+    const majorQuery = targetPick?.dept || currentStudent?.target_dept || '';
+    if (!university && !majorQuery) {
+      const timer = window.setTimeout(() => setSubjectHints([]), 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    let cancelled = false;
+    const params = new URLSearchParams();
+    if (university) params.set('university', university);
+    if (majorQuery) params.set('major', majorQuery);
+    params.set('limit', '6');
+
+    fetch(`/api/recommended-subjects?${params.toString()}`)
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const data: { results?: UniversitySubjectRecord[] } = await res.json();
+        if (!cancelled) setSubjectHints(collectSubjectHints(data.results ?? []));
+      })
+      .catch(() => {
+        if (!cancelled) setSubjectHints([]);
+      });
+
+    return () => { cancelled = true; };
+  }, [currentStudent?.target_dept, targetPick?.dept, targetPick?.name]);
 
   const toggleCompetency = (key: string) => {
     setSelectedCompetencies(prev =>
@@ -783,9 +1038,53 @@ export function Service4Seteuk() {
     finally { setFollowUpsLoading(false); }
   }
 
+  async function saveSeteukResult(nextDraft: string, nextPlan: { plan: PlanItem[] } | null) {
+    if (!currentStudent || !nextDraft.trim()) {
+      setSaveMessage(currentStudent ? null : '학생을 선택하면 결과가 저장됩니다.');
+      return;
+    }
+
+    const context = {
+      targetUniversity: targetPick?.name,
+      targetDept: targetPick?.dept || effectiveMajor,
+      weaknesses: readinessWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`),
+      subjectHints,
+    };
+
+    const record: SeteukRecord = {
+      id: createRecordId(),
+      savedAt: new Date().toISOString(),
+      major: effectiveMajor,
+      interest,
+      activities,
+      selectedTopic,
+      selectedMotivation,
+      selectedCompetencies,
+      selectedFollowUp,
+      draft: nextDraft,
+      plan: nextPlan,
+      oneLineFeedback: buildOneLineFeedback(selectedTopic, readinessWeaknesses),
+      context,
+    };
+
+    const nextRecords = [
+      record,
+      ...savedSeteukRecords.filter((item) => item.id !== record.id),
+    ].slice(0, 5);
+    const updated = await updateStudent(currentStudent.id, {
+      naesin_data: {
+        ...getNaesinData(currentStudent.naesin_data),
+        seteuk_records: nextRecords,
+        seteuk_latest: record,
+      },
+    });
+    setSaveMessage(updated ? '학생별 세특 결과 저장 완료' : '학생별 저장 실패. 다시 생성해 주세요.');
+  }
+
   async function fetchFinal() {
     setFinalLoading(true);
     setFinalError(null);
+    setSaveMessage(null);
     try {
       const res = await fetch('/api/analyze/seteuk', {
         method: 'POST',
@@ -795,12 +1094,20 @@ export function Service4Seteuk() {
           motivation: selectedMotivation,
           competencies: selectedCompetencies,
           followUp: selectedFollowUp,
+          activities,
+          targetUniversity: targetPick?.name,
+          targetDept: targetPick?.dept || effectiveMajor,
+          weaknesses: readinessWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`),
+          subjectHints,
         }),
       });
       if (!res.ok) throw new Error('서버 오류');
       const data = await res.json();
-      setDraft(data.draft ?? '');
-      setPlan(data.plan ?? null);
+      const nextDraft = data.draft ?? '';
+      const nextPlan = data.plan ?? null;
+      setDraft(nextDraft);
+      setPlan(nextPlan);
+      await saveSeteukResult(nextDraft, nextPlan);
     } catch {
       setFinalError('세특 생성 실패. 다시 시도해주세요.');
     } finally {
@@ -831,6 +1138,44 @@ export function Service4Seteuk() {
     if (phase > 1) setPhase((p) => (p - 1) as Phase);
   };
 
+  const applySuggestion = (suggestion: SeteukSuggestion) => {
+    if (!major.trim()) setMajor(targetPick?.dept || currentStudent?.target_dept || '');
+    setInterest(suggestion.interest);
+    setActivities(suggestion.activities);
+    setTopics([]);
+    setSelectedTopic('');
+    setMotivations([]);
+    setSelectedMotivation('');
+    setCompetencies([]);
+    setSelectedCompetencies([]);
+    setFollowUps([]);
+    setSelectedFollowUp('');
+    setDraft('');
+    setPlan(null);
+    setFinalError(null);
+    setSaveMessage('보완 후보를 입력에 적용했습니다.');
+    setPhase(1);
+  };
+
+  const loadSeteukRecord = (record: SeteukRecord) => {
+    setMajor(record.major);
+    setInterest(record.interest);
+    setActivities(record.activities);
+    setSelectedTopic(record.selectedTopic);
+    setSelectedMotivation(record.selectedMotivation);
+    setSelectedCompetencies(record.selectedCompetencies);
+    setSelectedFollowUp(record.selectedFollowUp);
+    setDraft(record.draft);
+    setPlan(record.plan);
+    setTopics([]);
+    setMotivations([]);
+    setCompetencies([]);
+    setFollowUps([]);
+    setFinalError(null);
+    setSaveMessage(record.oneLineFeedback);
+    setPhase(6);
+  };
+
   const handleReset = () => {
     if (!confirm('모든 내용이 초기화됩니다. 계속하시겠습니까?')) return;
     setPhase(1);
@@ -840,9 +1185,9 @@ export function Service4Seteuk() {
     setMotivations([]); setSelectedMotivation('');
     setCompetencies([]); setSelectedCompetencies([]);
     setFollowUps([]); setSelectedFollowUp('');
-    setDraft(''); setPlan(null); setFinalError(null);
-    localStorage.removeItem(LS_DATA);
-    localStorage.removeItem(LS_PHASE);
+    setDraft(''); setPlan(null); setFinalError(null); setSaveMessage(null);
+    localStorage.removeItem(storageKeys.data);
+    localStorage.removeItem(storageKeys.phase);
   };
 
   const canNext = () => {
@@ -864,12 +1209,22 @@ export function Service4Seteuk() {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
         {phase === 1 && (
-          <Phase1
-            major={effectiveMajor} setMajor={setMajor}
-            interest={interest} setInterest={setInterest}
-            activities={activities} setActivities={setActivities}
-            onNext={handleNext} loading={topicsLoading}
-          />
+          <>
+            <RemediationPanel
+              suggestions={remediationSuggestions}
+              onApplySuggestion={applySuggestion}
+              savedRecords={savedSeteukRecords}
+              onLoadRecord={loadSeteukRecord}
+              targetLabel={targetLabel}
+              subjectHints={subjectHints}
+            />
+            <Phase1
+              major={effectiveMajor} setMajor={setMajor}
+              interest={interest} setInterest={setInterest}
+              activities={activities} setActivities={setActivities}
+              onNext={handleNext} loading={topicsLoading}
+            />
+          </>
         )}
         {phase === 2 && (
           <Phase2
@@ -902,11 +1257,24 @@ export function Service4Seteuk() {
           />
         )}
         {phase === 6 && (
-          <Phase6
-            draft={draft} plan={plan}
-            loading={finalLoading} error={finalError}
-            onRetry={fetchFinal}
-          />
+          <>
+            <Phase6
+              draft={draft} plan={plan}
+              loading={finalLoading} error={finalError}
+              onRetry={fetchFinal}
+            />
+            {saveMessage && (
+              <div style={{
+                marginTop: 12, padding: '12px 14px', borderRadius: 10,
+                background: saveMessage.includes('완료') ? T.successSoft : T.bgAlt,
+                border: `1px solid ${saveMessage.includes('완료') ? '#86EFAC' : T.border}`,
+                color: saveMessage.includes('완료') ? T.success : T.textMuted,
+                fontSize: 13, fontWeight: 700, fontFamily: FONT,
+              }}>
+                {saveMessage}
+              </div>
+            )}
+          </>
         )}
 
         {/* Bottom navigation (phases 3,4,5) */}

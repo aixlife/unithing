@@ -2,6 +2,25 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+type SeteukPostBody = {
+  major?: string;
+  interest?: string;
+  activities?: string;
+  topic?: string;
+  motivation?: string;
+  competencies?: string[] | string;
+  followUp?: string;
+  targetUniversity?: string;
+  targetDept?: string;
+  weaknesses?: string[];
+  subjectHints?: string[];
+};
+
+function formatList(values: string[] | undefined) {
+  if (!values?.length) return '-';
+  return values.map((value) => `- ${value}`).join('\n');
+}
+
 function getModel(system?: string) {
   return genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
@@ -61,12 +80,27 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { major, interest, topic, motivation, competencies, followUp } = await req.json();
+  const body = await req.json() as SeteukPostBody;
+  const {
+    major = '',
+    interest = '',
+    activities = '',
+    topic = '',
+    motivation = '',
+    competencies = [],
+    followUp = '',
+    targetUniversity = '',
+    targetDept = '',
+    weaknesses,
+    subjectHints,
+  } = body;
   const compStr = Array.isArray(competencies) ? competencies.join('\n') : competencies;
 
   const system = `나는 교사야, 너와 함께 세특을 쓰고 싶어. 학생의 결과물과 나의 평가를 바탕으로 세특을 적어줘.
 학생의 역량과 근거, 그리고 구체적인 스토리를 담아줘. 학생이 주도적으로 탐구한 과정이 드러나야 해.
-교사가 관찰한 시점으로 서술하고, 수동적 참여가 아닌 능동적 탐구 행동을 강조해.`;
+교사가 관찰한 시점으로 서술하고, 수동적 참여가 아닌 능동적 탐구 행동을 강조해.
+세특은 구체적이고 객관적인 행동, 학습 태도와 주도성, 성장 과정, 전공 연계성, 협업/리더십, 사실 기반 서술을 우선한다.
+입학사정관 관점에서는 학생의 질문에서 출발한 탐구 과정, 활동의 의미와 성장, 진로 일관성, 창의적 문제 해결, 간결한 명사형 서술이 중요하다.`;
 
   const planPrompt = `다음 정보를 바탕으로 체계적인 탐구 계획서를 완성해줘.
 코드블록 없이 JSON만 출력:
@@ -91,17 +125,26 @@ export async function POST(req: Request) {
     { "category": "탐구 내용", "content": "주제에 대한 구체적인 탐구 전개 내용" },
     { "category": "예상 결과", "content": "도출될 것으로 기대되는 결과" },
     { "category": "함양하게 된 역량", "content": "선택한 역량 구체화" },
-    { "category": "후속활동", "content": "선택한 후속 활동 구체화" }
+    { "category": "후속활동", "content": "선택한 후속 활동 구체화" },
+    { "category": "학생 상담용 한 줄 피드백", "content": "학생에게 바로 전달할 수 있는 짧은 피드백" }
   ]
 }
 
 [탐구 방법 작성 지침]
 주제에 따라 특정 단계가 부자연스럽다면 해당 단계는 제외하고 자연스러운 흐름으로 최대 7단계까지 구성해줘.
 각 단계의 description은 학생이 실제로 수행할 수 있는 구체적인 활동으로 작성해줘.
+생기부 보완 포인트는 결핍을 그대로 드러내기보다, 이번 탐구로 만들 근거와 성장 포인트로 전환해줘.
 
 [정보]
 - 희망 학과: ${major}
+- 목표 대학: ${targetUniversity || '-'}
+- 목표 모집단위: ${targetDept || major || '-'}
 - 관심 주제/호기심: ${interest}
+- 기존 활동/생기부 보완 맥락: ${activities || '-'}
+- 생기부 보완 포인트:
+${formatList(weaknesses)}
+- 목표 대학/학과 권장과목 힌트:
+${formatList(subjectHints)}
 - 탐구 주제: ${topic}
 - 탐구 동기: ${motivation}
 - 핵심 역량: ${compStr}
@@ -112,7 +155,14 @@ export async function POST(req: Request) {
 
 [정보]
 - 희망 학과: ${major}
+- 목표 대학: ${targetUniversity || '-'}
+- 목표 모집단위: ${targetDept || major || '-'}
 - 관심 주제/호기심: ${interest}
+- 기존 활동/생기부 보완 맥락: ${activities || '-'}
+- 생기부 보완 포인트:
+${formatList(weaknesses)}
+- 목표 대학/학과 권장과목 힌트:
+${formatList(subjectHints)}
 - 탐구 주제: ${topic}
 - 탐구 동기: ${motivation}
 - 핵심 역량: ${compStr}
@@ -123,7 +173,8 @@ export async function POST(req: Request) {
 2. 과정 중심 서술: 어떤 문제를 인식하고 어떤 개념을 적용하여 어떻게 모델링/분석했는지 구체적인 How가 드러나게 작성.
 3. 어투 및 주어: 교사의 입장에서 관찰한 형태. 주어(학생은, 이 학생은) 생략. 종결형 어미는 명사형(~임, ~함). 현재형으로 작성.
 4. 금지어: 네이버/구글/다음->포탈사이트, 유튜브->동영상 공유 플랫폼, Chat GPT->생성형 인공지능.
-5. 중요: 반드시 줄 바꿈 없이 하나의 단락으로만 작성해줘.`;
+5. 목표 대학/학과와 권장과목은 직접 홍보 문구처럼 쓰지 말고, 교과 개념과 탐구 활동의 자연스러운 근거로 녹여줘.
+6. 중요: 반드시 줄 바꿈 없이 하나의 단락으로만 작성해줘.`;
 
   try {
     const model = getModel(system);

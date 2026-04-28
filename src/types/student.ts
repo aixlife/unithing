@@ -29,9 +29,47 @@ export type Service1Snapshot = {
   updatedAt: string;
 };
 
+export type SeteukPlanStep = {
+  step: string;
+  title: string;
+  description: string;
+};
+
+export type SeteukPlanItem = {
+  category: string;
+  content?: string;
+  isStepByStep?: boolean;
+  steps?: SeteukPlanStep[];
+};
+
+export type SeteukResultContext = {
+  targetUniversity?: string;
+  targetDept?: string;
+  weaknesses?: string[];
+  subjectHints?: string[];
+};
+
+export type SeteukRecord = {
+  id: string;
+  savedAt: string;
+  major: string;
+  interest: string;
+  activities: string;
+  selectedTopic: string;
+  selectedMotivation: string;
+  selectedCompetencies: string[];
+  selectedFollowUp: string;
+  draft: string;
+  plan: { plan: SeteukPlanItem[] } | null;
+  oneLineFeedback: string;
+  context: SeteukResultContext;
+};
+
 export type NaesinData = Record<string, unknown> & {
   service1?: Service1Snapshot;
   university_picks?: UniversityPicks;
+  seteuk_records?: SeteukRecord[];
+  seteuk_latest?: SeteukRecord;
 };
 
 export const TARGET_PICK_SLOTS: { slot: TargetPickSlot; label: TargetPickLabel }[] = [
@@ -83,6 +121,29 @@ function isUniversityTargetPick(value: unknown): value is UniversityTargetPick {
   );
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isSeteukRecord(value: unknown): value is SeteukRecord {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.savedAt === 'string' &&
+    typeof value.major === 'string' &&
+    typeof value.interest === 'string' &&
+    typeof value.activities === 'string' &&
+    typeof value.selectedTopic === 'string' &&
+    typeof value.selectedMotivation === 'string' &&
+    isStringArray(value.selectedCompetencies) &&
+    typeof value.selectedFollowUp === 'string' &&
+    typeof value.draft === 'string' &&
+    (value.plan === null || isRecord(value.plan)) &&
+    typeof value.oneLineFeedback === 'string' &&
+    isRecord(value.context)
+  );
+}
+
 export function getNaesinData(raw: unknown): NaesinData {
   return isRecord(raw) ? { ...raw } : {};
 }
@@ -104,4 +165,16 @@ export function toTargetPickSlot(label: TargetPickLabel): TargetPickSlot {
 
 export function getPrimaryTargetPick(picks: UniversityPicks): UniversityTargetPick | null {
   return picks.fit ?? picks.challenge ?? picks.safe ?? null;
+}
+
+export function getSeteukRecords(raw: unknown): SeteukRecord[] {
+  const rawRecords = getNaesinData(raw).seteuk_records;
+  if (!Array.isArray(rawRecords)) return [];
+  return rawRecords.filter(isSeteukRecord);
+}
+
+export function getLatestSeteukRecord(raw: unknown): SeteukRecord | null {
+  const latest = getNaesinData(raw).seteuk_latest;
+  if (isSeteukRecord(latest)) return latest;
+  return getSeteukRecords(raw)[0] ?? null;
 }

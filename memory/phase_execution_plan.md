@@ -39,17 +39,19 @@ updated: 2026-04-28
   - `curriculumData.ts`
   - `universityData.ts`
   - `subjectDetails.ts`
+- Service2 전체 2028 대학별 권장과목 CSV 검색/AI 과목 설계 연결
+- Service1 목표 대학 → Service2 과목 설계 → Service4 세특 보완 후보 흐름 연결
+- Service4 최종 세특 결과를 학생별 `naesin_data`에 저장하고 복원
 - Service5는 Service3 분석 결과를 재사용하는 리포트 화면으로 통합
 - `npm run lint`, `npm run build` 통과
 
 ### 주의할 현재 한계
 
 - 카카오 로그인은 버튼만 있고 provider 미연동
-- Service2는 전체 권장과목 CSV가 아니라 원본 앱의 curated 데이터 중심
 - Service2의 교육과정 PDF AI 파싱 기능은 remix 버전에 있었고 현재 통합본에는 없음
 - Service5 원본의 Excel/Markdown 다운로드, 누적 분석, D3 워드클라우드는 축소됨
 - Service3/5 분석 프롬프트는 대학 가이드북 철학을 반영하지만 RAG 방식으로 PDF 원문을 직접 검색하지는 않음
-- Service3 → Service1 → Service2 → Service4의 자동 연결은 아직 없음
+- 세특 PDF 자료 전체를 RAG/reference snippet으로 검색하는 구조는 아직 없음
 - Supabase schema/RLS 기준은 문서화됐고, 실제 migration 파일은 아직 없음
 - Next build workspace root 경고는 `next.config.ts`의 `turbopack.root`로 해소됨
 - Vercel 배포본만 테스트할 경우 localhost OAuth URL 추가는 필요 없음. 로컬 로그인 테스트 때만 필요
@@ -257,6 +259,8 @@ updated: 2026-04-28
 
 ## Phase 4 — 세특 도우미를 생기부 보완 도구로 연결
 
+**상태:** 완료 — 2026-04-28
+
 **목표:** Service4를 독립 세특 생성기가 아니라 생기부 약점 보완 도구로 연결한다.
 
 ### 원본 참조
@@ -301,6 +305,19 @@ updated: 2026-04-28
 - 생기부 분석의 부족점이 세특 주제 추천으로 이어짐
 - 목표 대학/학과/과목 설계가 세특 초안에 반영됨
 - 학생별 세특 결과를 저장하고 다시 열 수 있음
+
+### Phase 4 완료 기록
+
+- Service4 시작 화면에 생기부 보완 맥락 패널을 추가함.
+- Service3 `admissionsReadiness.criticalWeaknesses`에서 최대 3개 세특 보완 후보를 생성함.
+- Service1 목표 대학 3 Picks의 primary pick과 학생 목표 학과를 Service4 입력/프롬프트 맥락으로 연결함.
+- Phase 3의 2028 대학별 권장과목 API를 Service4에서 조회해 목표 대학/학과 권장과목 힌트로 사용함.
+- `/api/analyze/seteuk` 최종 생성 프롬프트에 목표 대학, 목표 모집단위, 기존 활동/보완 맥락, 생기부 보완점, 권장과목 힌트를 추가함.
+- 교사 세특 작성요령, 입학사정관 세특 평가 기준, 세특 역량 자료의 핵심 원칙을 프롬프트 규칙으로 반영함.
+- 최종 생성 결과를 `students.naesin_data.seteuk_records`와 `students.naesin_data.seteuk_latest`에 저장함.
+- Service4 localStorage 임시 저장을 학생별 키로 분리함.
+- 저장된 세특 결과를 현재 학생 기준으로 다시 불러올 수 있게 함.
+- 세부 기록: [Phase 4 Seteuk Remediation](../docs/phase-4-seteuk-remediation.md)
 
 ## Phase 5 — 통합 상담 로드맵 화면
 
