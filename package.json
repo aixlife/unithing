@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "node node_modules/eslint/bin/eslint.js",
-    "data:universities": "node scripts/build-universities-data.mjs"
+    "data:universities": "node scripts/build-universities-data.mjs",
+    "data:subjects": "node scripts/build-recommended-subjects-data.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

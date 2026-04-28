@@ -11,6 +11,7 @@ import { UNIVERSITY_TIPS } from '@/data/universityData';
 import { SUBJECT_DETAILS } from '@/data/subjectDetails';
 import { useStudent } from '@/contexts/StudentContext';
 import { getPrimaryTargetPick, getUniversityPicks } from '@/types/student';
+import type { SubjectRecommendationPlan, UniversitySubjectRecord } from '@/types/subjects';
 
 const T = {
   primary: '#1B64DA',
@@ -130,7 +131,7 @@ function getGradingType(name: string) {
 }
 
 export function Service2Subject() {
-  const { currentStudent } = useStudent();
+  const { currentStudent, segibuAnalysis } = useStudent();
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,6 +151,16 @@ export function Service2Subject() {
   const [univSearchTerm, setUnivSearchTerm] = useState('');
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<string | null>(null);
+  const [subjectUniversityQuery, setSubjectUniversityQuery] = useState('');
+  const [subjectMajorQuery, setSubjectMajorQuery] = useState('');
+  const [subjectMatches, setSubjectMatches] = useState<UniversitySubjectRecord[]>([]);
+  const [subjectMatchTotal, setSubjectMatchTotal] = useState(0);
+  const [subjectSourceCount, setSubjectSourceCount] = useState<number | null>(null);
+  const [subjectSearchLoading, setSubjectSearchLoading] = useState(false);
+  const [subjectSearchError, setSubjectSearchError] = useState<string | null>(null);
+  const [subjectPlan, setSubjectPlan] = useState<SubjectRecommendationPlan | null>(null);
+  const [subjectPlanLoading, setSubjectPlanLoading] = useState(false);
+  const [subjectPlanError, setSubjectPlanError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const allMajors = useMemo(() => {
@@ -163,6 +174,18 @@ export function Service2Subject() {
   const studentTargetDept = useMemo(() => {
     return currentStudent?.target_dept || studentTargetPick?.dept || '';
   }, [currentStudent?.target_dept, studentTargetPick]);
+
+  const subjectWeaknesses = useMemo(() => {
+    return segibuAnalysis?.admissionsReadiness?.criticalWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`) ?? [];
+  }, [segibuAnalysis]);
+
+  const subjectTargetUniversity = useMemo(() => {
+    return subjectUniversityQuery.trim() || studentTargetPick?.name || univSearchTerm.trim();
+  }, [studentTargetPick?.name, subjectUniversityQuery, univSearchTerm]);
+
+  const subjectTargetMajor = useMemo(() => {
+    return subjectMajorQuery.trim() || studentTargetPick?.dept || selectedMajor?.name || studentTargetDept;
+  }, [selectedMajor?.name, studentTargetDept, studentTargetPick?.dept, subjectMajorQuery]);
 
   useEffect(() => {
     if (univSearchTerm.trim() || !studentTargetPick?.name) return;
@@ -313,6 +336,77 @@ export function Service2Subject() {
     setCustomGroups(groups);
     setIsCustomMode(true);
     setShowCustomForm(false);
+  };
+
+  const fetchSubjectMatches = async () => {
+    setSubjectSearchLoading(true);
+    setSubjectSearchError(null);
+    setSubjectPlanError(null);
+    try {
+      const params = new URLSearchParams();
+      if (subjectTargetUniversity) params.set('university', subjectTargetUniversity);
+      if (subjectTargetMajor) params.set('major', subjectTargetMajor);
+      params.set('limit', '12');
+
+      const res = await fetch(`/api/recommended-subjects?${params.toString()}`);
+      if (!res.ok) throw new Error('권장과목 검색 실패');
+      const data: {
+        results: UniversitySubjectRecord[];
+        total: number;
+        source: { rowCount: number };
+      } = await res.json();
+
+      setSubjectMatches(data.results);
+      setSubjectMatchTotal(data.total);
+      setSubjectSourceCount(data.source.rowCount);
+      setSubjectPlan(null);
+    } catch {
+      setSubjectSearchError('권장과목 데이터를 불러오지 못했습니다.');
+    } finally {
+      setSubjectSearchLoading(false);
+    }
+  };
+
+  const fetchSubjectPlan = async () => {
+    if (!selectedMajor) return;
+    const records = subjectMatches.length > 0 ? subjectMatches : universityTips.map((tip, index) => ({
+      id: `curated-${index}`,
+      region: '',
+      location: tip.location,
+      university: tip.university,
+      college: '',
+      major: tip.major,
+      unit: tip.major,
+      core: tip.core,
+      recommended: tip.recommended,
+      coreSubjects: tip.core && tip.core !== '-' ? tip.core.split(',').map(s => s.trim()).filter(Boolean) : [],
+      recommendedSubjects: tip.recommended && tip.recommended !== '-' ? tip.recommended.split(',').map(s => s.trim()).filter(Boolean) : [],
+      note: tip.note ?? '',
+    }));
+
+    setSubjectPlanLoading(true);
+    setSubjectPlanError(null);
+    try {
+      const res = await fetch('/api/recommend/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUniversity: subjectTargetUniversity,
+          targetMajor: subjectTargetMajor,
+          selectedMajor: selectedMajor.name,
+          selectedMajorSubjects: selectedMajor.recommendedSubjects,
+          universityRecords: records,
+          weaknesses: subjectWeaknesses,
+        }),
+      });
+      if (!res.ok) throw new Error('추천 설계 실패');
+      const data: { plan: SubjectRecommendationPlan } = await res.json();
+      setSubjectPlan(data.plan);
+    } catch {
+      setSubjectPlanError('과목 설계를 생성하지 못했습니다.');
+    } finally {
+      setSubjectPlanLoading(false);
+    }
   };
 
   // ---- RENDER ----
@@ -752,9 +846,175 @@ export function Service2Subject() {
                 )}
               </div>
 
-              {/* Right: University tips (1/3) */}
-              {universityTips.length > 0 && (
-                <div style={{ flex: '0 0 280px', minWidth: 240 }}>
+              {/* Right: target university data (1/3) */}
+              <div style={{ flex: '0 0 320px', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{
+                  background: T.surface,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 14,
+                  overflow: 'hidden',
+                  boxShadow: T.shadowLg,
+                }}>
+                  <div style={{ background: T.primary, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <span style={{ color: '#fff', display: 'flex' }}><IconGrad /></span>
+                      <span style={{ color: '#fff', fontSize: 13, fontWeight: 800 }}>2028 전체 권장과목</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 7 }}>
+                      <input
+                        type="text"
+                        placeholder={subjectTargetUniversity ? `대학: ${subjectTargetUniversity}` : '대학명'}
+                        value={subjectUniversityQuery}
+                        onChange={(e) => setSubjectUniversityQuery(e.target.value)}
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '8px 10px',
+                          background: 'rgba(255,255,255,0.12)',
+                          border: '1px solid rgba(255,255,255,0.22)',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          color: '#fff',
+                          outline: 'none',
+                          fontFamily: FONT,
+                        }}
+                      />
+                      <input
+                        type="text"
+                        placeholder={subjectTargetMajor ? `모집단위: ${subjectTargetMajor}` : '모집단위/학과'}
+                        value={subjectMajorQuery}
+                        onChange={(e) => setSubjectMajorQuery(e.target.value)}
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '8px 10px',
+                          background: 'rgba(255,255,255,0.12)',
+                          border: '1px solid rgba(255,255,255,0.22)',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          color: '#fff',
+                          outline: 'none',
+                          fontFamily: FONT,
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={fetchSubjectMatches}
+                      disabled={subjectSearchLoading}
+                      style={{
+                        width: '100%',
+                        marginTop: 8,
+                        padding: '9px 10px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background: subjectSearchLoading ? 'rgba(255,255,255,0.18)' : '#fff',
+                        color: subjectSearchLoading ? 'rgba(255,255,255,0.65)' : T.primary,
+                        fontSize: 12,
+                        fontWeight: 850,
+                        cursor: subjectSearchLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      {subjectSearchLoading ? '검색 중...' : '대학 자료 검색'}
+                    </button>
+                  </div>
+
+                  <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {subjectSourceCount !== null && (
+                      <div style={{ fontSize: 11, color: T.textSubtle, lineHeight: 1.45 }}>
+                        전체 {subjectSourceCount.toLocaleString()}건 중 {subjectMatchTotal.toLocaleString()}건 매칭
+                      </div>
+                    )}
+                    {subjectSearchError && (
+                      <div style={{ fontSize: 12, color: T.danger, background: T.dangerSoft, borderRadius: 8, padding: '8px 10px' }}>
+                        {subjectSearchError}
+                      </div>
+                    )}
+                    {subjectMatches.length === 0 && !subjectSearchError && (
+                      <div style={{ fontSize: 12, color: T.textSubtle, lineHeight: 1.55, background: T.bg, borderRadius: 8, padding: '10px 12px' }}>
+                        Phase 2에서 고른 목표 대학이 있으면 그 값을 기준으로 검색합니다.
+                      </div>
+                    )}
+                    {subjectMatches.length > 0 && (
+                      <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {subjectMatches.map((record) => (
+                          <div key={record.id} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '11px 12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 850, color: T.text }}>{record.university}</div>
+                                <div style={{ fontSize: 11, color: T.textSubtle }}>{record.location}{record.college ? ` · ${record.college}` : ''}</div>
+                              </div>
+                              <span style={{ fontSize: 11, color: T.textSubtle, flexShrink: 0 }}>{record.region}</span>
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: T.textMuted, marginBottom: 7 }}>{record.major}</div>
+                            {record.core && (
+                              <div style={{ marginBottom: 6 }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: T.primary, marginBottom: 3 }}>핵심과목</div>
+                                <div style={{ fontSize: 12, color: T.text, background: T.primarySoft, borderRadius: 6, padding: '5px 8px', lineHeight: 1.5 }}>{record.core}</div>
+                              </div>
+                            )}
+                            {record.recommended && (
+                              <div style={{ marginBottom: 6 }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: T.textMuted, marginBottom: 3 }}>권장과목</div>
+                                <div style={{ fontSize: 12, color: T.textMuted, background: T.bgAlt, borderRadius: 6, padding: '5px 8px', lineHeight: 1.5 }}>{record.recommended}</div>
+                              </div>
+                            )}
+                            {record.note && <div style={{ fontSize: 11, color: T.textSubtle, lineHeight: 1.45 }}>{record.note}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={fetchSubjectPlan}
+                      disabled={subjectPlanLoading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: 9,
+                        border: `1px solid ${T.primaryBorder}`,
+                        background: subjectPlanLoading ? T.bgAlt : T.primarySoft,
+                        color: subjectPlanLoading ? T.textSubtle : T.primary,
+                        fontSize: 12,
+                        fontWeight: 850,
+                        cursor: subjectPlanLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      {subjectPlanLoading ? '설계 중...' : 'AI 과목 설계'}
+                    </button>
+                    {subjectPlanError && <div style={{ fontSize: 12, color: T.danger }}>{subjectPlanError}</div>}
+                    {subjectPlan && (
+                      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 9 }}>
+                        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.55 }}>{subjectPlan.summary}</div>
+                        {([
+                          { label: '2학년', items: subjectPlan.grade2 },
+                          { label: '3학년', items: subjectPlan.grade3 },
+                        ] as const).map(section => (
+                          <div key={section.label}>
+                            <div style={{ fontSize: 11, fontWeight: 850, color: T.primary, marginBottom: 5 }}>{section.label}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                              {section.items.map((item, index) => (
+                                <div key={`${section.label}-${item.subject}-${index}`} style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.45 }}>
+                                  <strong style={{ color: T.text }}>{item.subject}</strong> — {item.reason}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {subjectPlan.cautions.length > 0 && (
+                          <div style={{ background: T.accentSoft, borderRadius: 8, padding: '8px 10px' }}>
+                            {subjectPlan.cautions.slice(0, 3).map((item, index) => (
+                              <div key={index} style={{ fontSize: 11, color: '#92400E', lineHeight: 1.45 }}>{item}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {universityTips.length > 0 && (
                   <div style={{
                     background: T.surface,
                     border: `1px solid ${T.border}`,
@@ -826,8 +1086,8 @@ export function Service2Subject() {
                       ))}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 

@@ -197,6 +197,8 @@ updated: 2026-04-28
 
 ## Phase 3 — 과목 가이드 전체 데이터화 및 AI 추천
 
+**상태:** 완료 — 2026-04-28
+
 **목표:** Service2를 정적 가이드에서 목표 대학·학과 기반 과목 설계 도구로 만든다.
 
 ### 원본 참조
@@ -218,7 +220,7 @@ updated: 2026-04-28
 ### 작업
 
 - CP949 권장과목 CSV 파서 작성
-  - 물리 파일 1,362행
+  - 파싱된 CSV 행: 1,362행
   - 실제 데이터 시작 행: 5행
   - 컬럼: 권역, 지역, 대학명, 모집단위, 핵심과목, 권장과목, 비고
 - 권장과목 전체 데이터 API 추가
@@ -240,6 +242,18 @@ updated: 2026-04-28
 - 권장과목 CSV 전체에서 대학/학과 검색 가능
 - 목표 대학 Pick 기준으로 과목 설계 결과가 생성됨
 - 정적 추천과 AI 추천의 역할이 화면에서 분명함
+
+### Phase 3 완료 기록
+
+- `scripts/build-recommended-subjects-data.mjs`로 CP949 권장과목 CSV를 구조화함.
+- `src/data/recommendedSubjectsRaw.json`에 1,358개 실제 데이터 행과 47개 대학을 저장함.
+- `GET /api/recommended-subjects`를 추가해 대학/모집단위 검색을 제공함.
+- `POST /api/recommend/subjects`를 추가해 목표 대학/학과 기준 2학년·3학년 과목 설계를 생성함.
+- Gemini 사용 가능 시 AI JSON 설계를 사용하고, 실패하거나 키가 없으면 rule-based fallback을 반환하게 함.
+- Service2 오른쪽 패널에 2028 전체 권장과목 검색과 AI 과목 설계를 연결함.
+- 기존 curated 데이터는 과목 설명/선택군/PDF용으로 유지하고, CSV 데이터는 대학별 실제 검색용으로 분리함.
+- remix 버전의 학교 교육과정 PDF 파싱은 현 Phase에서 복원하지 않고 추후 판단으로 남김.
+- 세부 기록: [Phase 3 Subject Planning](../docs/phase-3-subject-planning.md)
 
 ## Phase 4 — 세특 도우미를 생기부 보완 도구로 연결
 
@@ -340,21 +354,17 @@ updated: 2026-04-28
 
 ## 우선 작업 큐
 
-1. Phase 0 마무리
-   - Vercel 로그인 스모크 테스트
-   - Supabase schema/RLS 문서화
-   - 입결 JSON 필터 기준 문서화
-2. Phase 1
-   - `숭신고 생기부.pdf`로 분석 품질 점검
-   - Service5 원본 기능 중 유지할 export 결정
-3. Phase 2
-   - 3 Picks 저장 구조 설계
-   - Service1 결과를 학생별 목표 대학으로 저장
-4. Phase 3
-   - 권장과목 CSV 파서/API 작성
-   - 목표 대학 기반 과목 추천으로 연결
-5. Phase 4
+1. Phase 0 완료
+   - Vercel 로그인, Supabase/입결 기준선, lint/build 기준선 고정
+2. Phase 1 완료
+   - 생기부 분석/리포트 상담 처방 스키마 고도화
+3. Phase 2 완료
+   - 목표 대학 3 Picks 저장 및 다음 서비스 연결
+4. Phase 3 완료
+   - 권장과목 CSV 전체 데이터화, API, 목표 대학 기반 과목 설계
+5. Phase 4 다음 작업
    - 생기부 보완점 기반 세특 추천 연결
+   - 목표 대학/과목 설계를 세특 주제 후보에 반영
 
 ## 작업 원칙
 
