@@ -216,6 +216,69 @@ function LoadingCard({ message }: { message: string }) {
   );
 }
 
+function ButtonSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 15,
+        height: 15,
+        borderRadius: '50%',
+        border: '2px solid rgba(255,255,255,0.45)',
+        borderTopColor: '#fff',
+        display: 'inline-block',
+        animation: 'spin 0.8s linear infinite',
+      }}
+    />
+  );
+}
+
+function PrimaryActionButton({
+  onClick,
+  disabled,
+  loading,
+  loadingLabel,
+  children,
+  style,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  loadingLabel: string;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  const inactive = Boolean(disabled || loading);
+  return (
+    <button
+      onClick={onClick}
+      disabled={inactive}
+      aria-busy={loading ? 'true' : 'false'}
+      style={{
+        height: 48,
+        borderRadius: 10,
+        background: loading ? T.indigo : disabled ? T.bgAlt : T.indigo,
+        color: loading || !disabled ? '#fff' : T.textSubtle,
+        border: 'none',
+        fontSize: 16,
+        fontWeight: 700,
+        cursor: loading ? 'wait' : disabled ? 'not-allowed' : 'pointer',
+        fontFamily: FONT,
+        opacity: loading ? 0.82 : 1,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        transition: 'background 0.15s, opacity 0.15s, transform 0.08s',
+        ...style,
+      }}
+    >
+      {loading && <ButtonSpinner />}
+      {loading ? loadingLabel : children}
+    </button>
+  );
+}
+
 function RefreshBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button
@@ -462,27 +525,24 @@ function Phase1({
         </div>
       </div>
 
-      <button
-        onClick={onNext} disabled={!canNext || loading}
-        style={{
-          width: '100%', height: 48, borderRadius: 10, marginTop: 24,
-          background: canNext && !loading ? T.indigo : T.bgAlt,
-          color: canNext && !loading ? '#fff' : T.textSubtle,
-          border: 'none', fontSize: 16, fontWeight: 700,
-          cursor: canNext && !loading ? 'pointer' : 'not-allowed', fontFamily: FONT,
-        }}
+      <PrimaryActionButton
+        onClick={onNext}
+        disabled={!canNext}
+        loading={loading}
+        loadingLabel="AI 주제 추천 중..."
+        style={{ width: '100%', marginTop: 24 }}
       >
-        {loading ? 'AI 주제 추천 중...' : '다음 단계로'}
-      </button>
+        다음 단계로
+      </PrimaryActionButton>
     </SectionCard>
   );
 }
 
 // ─── Phase 2: 탐구 주제 ───────────────────────────────────────────────────────
 function Phase2({
-  topics, loading, selectedTopic, setSelectedTopic, onRefresh, onNext,
+  topics, loading, nextLoading, selectedTopic, setSelectedTopic, onRefresh, onNext,
 }: {
-  topics: TopicItem[]; loading: boolean;
+  topics: TopicItem[]; loading: boolean; nextLoading: boolean;
   selectedTopic: string; setSelectedTopic: (v: string) => void;
   onRefresh: () => void; onNext: () => void;
 }) {
@@ -497,18 +557,18 @@ function Phase2({
           <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>탐구 주제 추천</h2>
           <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>추천된 주제 중 하나를 선택하거나 직접 입력하세요.</p>
         </div>
-        <RefreshBtn onClick={onRefresh} loading={loading} />
+        <RefreshBtn onClick={onRefresh} loading={loading || nextLoading} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
         {topics.map((topic, i) => {
           const chosen = selectedTopic === topic.title;
           return (
-            <div key={i} onClick={() => setSelectedTopic(topic.title)} style={{
-              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+            <div key={i} onClick={() => { if (!nextLoading) setSelectedTopic(topic.title); }} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: nextLoading ? 'default' : 'pointer',
               background: chosen ? T.indigoSoft : T.surfaceAlt,
               border: `2px solid ${chosen ? T.indigo : T.border}`,
-              transition: 'all 0.15s',
+              transition: 'all 0.15s', opacity: nextLoading ? 0.72 : 1,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                 <div>
@@ -528,32 +588,30 @@ function Phase2({
           type="text" value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)}
           placeholder="위 추천 주제를 클릭하거나 직접 입력하세요."
           style={inputStyle(focused)}
+          disabled={nextLoading}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
       </div>
 
-      <button
-        onClick={onNext} disabled={!selectedTopic.trim()}
-        style={{
-          width: '100%', height: 48, borderRadius: 10,
-          background: selectedTopic.trim() ? T.indigo : T.bgAlt,
-          color: selectedTopic.trim() ? '#fff' : T.textSubtle,
-          border: 'none', fontSize: 16, fontWeight: 700,
-          cursor: selectedTopic.trim() ? 'pointer' : 'not-allowed', fontFamily: FONT,
-        }}
+      <PrimaryActionButton
+        onClick={onNext}
+        disabled={!selectedTopic.trim()}
+        loading={nextLoading}
+        loadingLabel="탐구 동기 분석 중..."
+        style={{ width: '100%' }}
       >
         이 주제로 시작하기
-      </button>
+      </PrimaryActionButton>
     </SectionCard>
   );
 }
 
 // ─── Phase 3: 탐구 동기 ───────────────────────────────────────────────────────
 function Phase3({
-  motivations, loading, selectedMotivation, setSelectedMotivation, onRefresh,
+  motivations, loading, actionLoading, selectedMotivation, setSelectedMotivation, onRefresh,
 }: {
-  motivations: MotivationItem[]; loading: boolean;
+  motivations: MotivationItem[]; loading: boolean; actionLoading: boolean;
   selectedMotivation: string; setSelectedMotivation: (v: string) => void;
   onRefresh: () => void;
 }) {
@@ -568,18 +626,18 @@ function Phase3({
           <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>동기 확인</h2>
           <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>탐구 활동의 시작이 될 동기를 선택해 주세요.</p>
         </div>
-        <RefreshBtn onClick={onRefresh} loading={loading} />
+        <RefreshBtn onClick={onRefresh} loading={loading || actionLoading} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
         {motivations.map((mot, i) => {
           const chosen = selectedMotivation === mot.content;
           return (
-            <div key={i} onClick={() => setSelectedMotivation(mot.content)} style={{
-              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+            <div key={i} onClick={() => { if (!actionLoading) setSelectedMotivation(mot.content); }} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: actionLoading ? 'default' : 'pointer',
               background: chosen ? T.indigoSoft : T.surfaceAlt,
               border: `2px solid ${chosen ? T.indigo : T.border}`,
-              transition: 'all 0.15s',
+              transition: 'all 0.15s', opacity: actionLoading ? 0.72 : 1,
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div style={{ flex: 1 }}>
@@ -602,6 +660,7 @@ function Phase3({
           placeholder="위 유형 중 하나를 선택하거나 내용을 다듬어 입력해 주세요."
           rows={4}
           style={{ ...inputStyle(focused), resize: 'vertical' }}
+          disabled={actionLoading}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
@@ -612,9 +671,9 @@ function Phase3({
 
 // ─── Phase 4: 핵심 역량 ───────────────────────────────────────────────────────
 function Phase4({
-  competencies, loading, selectedCompetencies, onToggle, onRefresh,
+  competencies, loading, actionLoading, selectedCompetencies, onToggle, onRefresh,
 }: {
-  competencies: CompetencyItem[]; loading: boolean;
+  competencies: CompetencyItem[]; loading: boolean; actionLoading: boolean;
   selectedCompetencies: string[];
   onToggle: (key: string) => void;
   onRefresh: () => void;
@@ -628,7 +687,7 @@ function Phase4({
           <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>핵심 역량 확인</h2>
           <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>강조하고 싶은 역량을 모두 선택해 주세요. (복수 선택 가능)</p>
         </div>
-        <RefreshBtn onClick={onRefresh} loading={loading} />
+        <RefreshBtn onClick={onRefresh} loading={loading || actionLoading} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
@@ -636,11 +695,11 @@ function Phase4({
           const key = `${comp.name}: ${comp.behavior}`;
           const chosen = selectedCompetencies.includes(key);
           return (
-            <div key={i} onClick={() => onToggle(key)} style={{
-              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+            <div key={i} onClick={() => { if (!actionLoading) onToggle(key); }} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: actionLoading ? 'default' : 'pointer',
               background: chosen ? T.indigoSoft : T.surfaceAlt,
               border: `2px solid ${chosen ? T.indigo : T.border}`,
-              transition: 'all 0.15s',
+              transition: 'all 0.15s', opacity: actionLoading ? 0.72 : 1,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                 <div>
@@ -670,9 +729,9 @@ function Phase4({
 
 // ─── Phase 5: 탐구 후속활동 ───────────────────────────────────────────────────
 function Phase5({
-  followUps, loading, selectedFollowUp, setSelectedFollowUp, onRefresh,
+  followUps, loading, actionLoading, selectedFollowUp, setSelectedFollowUp, onRefresh,
 }: {
-  followUps: FollowUpItem[]; loading: boolean;
+  followUps: FollowUpItem[]; loading: boolean; actionLoading: boolean;
   selectedFollowUp: string; setSelectedFollowUp: (v: string) => void;
   onRefresh: () => void;
 }) {
@@ -687,18 +746,18 @@ function Phase5({
           <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.02em', margin: 0, fontFamily: FONT }}>탐구 후속활동</h2>
           <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>탐구 이후 심화할 수 있는 후속 활동을 선택해 주세요.</p>
         </div>
-        <RefreshBtn onClick={onRefresh} loading={loading} />
+        <RefreshBtn onClick={onRefresh} loading={loading || actionLoading} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
         {followUps.map((fu, i) => {
           const chosen = selectedFollowUp === fu.content;
           return (
-            <div key={i} onClick={() => setSelectedFollowUp(fu.content)} style={{
-              padding: '16px 18px', borderRadius: 12, cursor: 'pointer',
+            <div key={i} onClick={() => { if (!actionLoading) setSelectedFollowUp(fu.content); }} style={{
+              padding: '16px 18px', borderRadius: 12, cursor: actionLoading ? 'default' : 'pointer',
               background: chosen ? T.indigoSoft : T.surfaceAlt,
               border: `2px solid ${chosen ? T.indigo : T.border}`,
-              transition: 'all 0.15s',
+              transition: 'all 0.15s', opacity: actionLoading ? 0.72 : 1,
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div style={{ flex: 1 }}>
@@ -721,6 +780,7 @@ function Phase5({
           placeholder="실행할 후속 활동 내용을 입력해 주세요."
           rows={4}
           style={{ ...inputStyle(focused), resize: 'vertical' }}
+          disabled={actionLoading}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
@@ -1115,7 +1175,10 @@ export function Service4Seteuk() {
     }
   }
 
+  const isStepBusy = topicsLoading || motivationsLoading || competenciesLoading || followUpsLoading || finalLoading;
+
   const handleNext = async () => {
+    if (isStepBusy) return;
     if (phase === 1) {
       if (topics.length === 0) await fetchTopics(effectiveMajor, interest, activities);
       setPhase(2);
@@ -1129,8 +1192,8 @@ export function Service4Seteuk() {
       if (followUps.length === 0) await fetchFollowUps(selectedTopic);
       setPhase(5);
     } else if (phase === 5) {
-      setPhase(6);
       await fetchFinal();
+      setPhase(6);
     }
   };
 
@@ -1191,7 +1254,8 @@ export function Service4Seteuk() {
   };
 
   const canNext = () => {
-    if (phase === 1) return effectiveMajor.trim().length > 0 && interest.trim().length > 0 && !topicsLoading;
+    if (isStepBusy) return false;
+    if (phase === 1) return effectiveMajor.trim().length > 0 && interest.trim().length > 0;
     if (phase === 2) return selectedTopic.trim().length > 0;
     if (phase === 3) return selectedMotivation.trim().length > 0;
     if (phase === 4) return selectedCompetencies.length > 0;
@@ -1199,7 +1263,20 @@ export function Service4Seteuk() {
     return false;
   };
 
-  const isAnyLoading = topicsLoading || motivationsLoading || competenciesLoading || followUpsLoading;
+  const nextActionLoading = (
+    (phase === 1 && topicsLoading)
+    || (phase === 2 && motivationsLoading)
+    || (phase === 3 && competenciesLoading)
+    || (phase === 4 && followUpsLoading)
+    || (phase === 5 && finalLoading)
+  );
+  const nextLoadingLabel = phase === 3
+    ? '핵심 역량 분석 중...'
+    : phase === 4
+      ? '후속활동 추천 중...'
+      : phase === 5
+        ? '세특 최종 생성 중...'
+        : '진행 중...';
 
   return (
     <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
@@ -1229,6 +1306,7 @@ export function Service4Seteuk() {
         {phase === 2 && (
           <Phase2
             topics={topics} loading={topicsLoading}
+            nextLoading={motivationsLoading}
             selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic}
             onRefresh={() => fetchTopics(effectiveMajor, interest, activities)}
             onNext={handleNext}
@@ -1237,6 +1315,7 @@ export function Service4Seteuk() {
         {phase === 3 && (
           <Phase3
             motivations={motivations} loading={motivationsLoading}
+            actionLoading={competenciesLoading}
             selectedMotivation={selectedMotivation} setSelectedMotivation={setSelectedMotivation}
             onRefresh={() => fetchMotivations(selectedTopic)}
           />
@@ -1244,6 +1323,7 @@ export function Service4Seteuk() {
         {phase === 4 && (
           <Phase4
             competencies={competencies} loading={competenciesLoading}
+            actionLoading={followUpsLoading}
             selectedCompetencies={selectedCompetencies}
             onToggle={toggleCompetency}
             onRefresh={() => fetchCompetencies(selectedTopic)}
@@ -1252,6 +1332,7 @@ export function Service4Seteuk() {
         {phase === 5 && (
           <Phase5
             followUps={followUps} loading={followUpsLoading}
+            actionLoading={finalLoading}
             selectedFollowUp={selectedFollowUp} setSelectedFollowUp={setSelectedFollowUp}
             onRefresh={() => fetchFollowUps(selectedTopic)}
           />
@@ -1278,33 +1359,35 @@ export function Service4Seteuk() {
         )}
 
         {/* Bottom navigation (phases 3,4,5) */}
-        {phase >= 3 && phase <= 5 && !isAnyLoading && (
+        {phase >= 3 && phase <= 5 && (
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button onClick={handleBack} style={{
+            <button onClick={handleBack} disabled={isStepBusy} style={{
               height: 48, padding: '0 24px', borderRadius: 10,
               background: T.bgAlt, color: T.textMuted, border: `1px solid ${T.border}`,
-              fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+              fontSize: 15, fontWeight: 600, cursor: isStepBusy ? 'not-allowed' : 'pointer', fontFamily: FONT,
+              opacity: isStepBusy ? 0.6 : 1,
             }}>
               이전 단계
             </button>
-            <button onClick={handleNext} disabled={!canNext()} style={{
-              flex: 1, height: 48, borderRadius: 10,
-              background: canNext() ? T.indigo : T.bgAlt,
-              color: canNext() ? '#fff' : T.textSubtle,
-              border: 'none', fontSize: 16, fontWeight: 700,
-              cursor: canNext() ? 'pointer' : 'not-allowed', fontFamily: FONT,
-            }}>
+            <PrimaryActionButton
+              onClick={handleNext}
+              disabled={!canNext()}
+              loading={nextActionLoading}
+              loadingLabel={nextLoadingLabel}
+              style={{ flex: 1 }}
+            >
               {phase === 5 ? 'AI 최종 생성하기' : '다음 단계로'}
-            </button>
+            </PrimaryActionButton>
           </div>
         )}
 
         {/* Back button on phase 2 */}
         {phase === 2 && (
-          <button onClick={handleBack} style={{
+          <button onClick={handleBack} disabled={isStepBusy} style={{
             height: 44, padding: '0 24px', borderRadius: 10, marginTop: 16,
             background: T.bgAlt, color: T.textMuted, border: `1px solid ${T.border}`,
-            fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: FONT, alignSelf: 'flex-start',
+            fontSize: 15, fontWeight: 600, cursor: isStepBusy ? 'not-allowed' : 'pointer', fontFamily: FONT, alignSelf: 'flex-start',
+            opacity: isStepBusy ? 0.6 : 1,
           }}>
             이전 단계
           </button>
