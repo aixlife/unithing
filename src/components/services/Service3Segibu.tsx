@@ -302,14 +302,15 @@ type RedactionBuildSummary = {
   autoCandidateCount: number;
   manualCandidateCount: number;
   dynamicZoneCount: number;
-  outputSizeBytes: number;
-  uploadLimitBytes: number;
+  previewSizeBytes: number;
+  sanitizedTextChars: number;
   renderScale: number;
   jpegQuality: number;
 };
 
 type RedactedSegibuResult = {
   file: File;
+  sanitizedText: string;
   summary: RedactionBuildSummary;
 };
 
@@ -345,7 +346,7 @@ type PdfDocumentProxyLike = {
 };
 
 const PDFJS_WORKER_SRC = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
-const SEGIBU_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+const SEGIBU_TEXT_UPLOAD_LIMIT_BYTES = 3.5 * 1024 * 1024;
 const REDACTION_PADDING = 0.004;
 const DYNAMIC_REDACTION_PADDING = 0.006;
 const REDACTION_RENDER_PROFILES = [
@@ -407,6 +408,13 @@ function expandZone(zone: RedactionZone, padding = REDACTION_PADDING): Redaction
 
 function zoneContainsPoint(zone: RedactionZone, x: number, y: number) {
   return x >= zone.x && x <= zone.x + zone.width && y >= zone.y && y <= zone.y + zone.height;
+}
+
+function zoneOverlapsBox(zone: RedactionZone, box: RedactionZone) {
+  return zone.x < box.x + box.width
+    && zone.x + zone.width > box.x
+    && zone.y < box.y + box.height
+    && zone.y + zone.height > box.y;
 }
 
 function isInFixedZone(box: TextBox) {
@@ -628,6 +636,47 @@ function formatBytes(bytes: number): string {
   return `${Math.ceil(bytes / 1024)}KB`;
 }
 
+function isTextBoxRedacted(box: TextBox, dynamicZonesByPage: Map<number, RedactionZone[]>) {
+  const fixedZones = getFixedSegibuRedactionZones(box.pageIndex).map((zone) => expandZone(zone, REDACTION_PADDING));
+  const dynamicZones = dynamicZonesByPage.get(box.pageIndex) ?? [];
+  return [...fixedZones, ...dynamicZones].some((zone) => zoneOverlapsBox(zone, box));
+}
+
+function buildSanitizedSegibuText(
+  pages: Array<{ boxes: TextBox[] }>,
+  dynamicZonesByPage: Map<number, RedactionZone[]>,
+) {
+  const chunks: string[] = [];
+
+  pages.forEach((pageData, pageIndex) => {
+    const visibleBoxes = pageData.boxes
+      .filter((box) => !isTextBoxRedacted(box, dynamicZonesByPage))
+      .sort((a, b) => b.y - a.y || a.x - b.x);
+    const lines: TextBox[][] = [];
+
+    for (const box of visibleBoxes) {
+      const centerY = box.y + box.height / 2;
+      const line = lines.find((items) => {
+        const first = items[0];
+        if (!first) return false;
+        const firstCenterY = first.y + first.height / 2;
+        return Math.abs(firstCenterY - centerY) < 0.006;
+      });
+      if (line) line.push(box);
+      else lines.push([box]);
+    }
+
+    const pageText = lines
+      .map((items) => items.sort((a, b) => a.x - b.x).map((box) => box.text).join(' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n');
+
+    if (pageText) chunks.push(`[${pageIndex + 1}쪽]\n${pageText}`);
+  });
+
+  return chunks.join('\n\n').trim();
+}
+
 function getRedactionProfiles(pageCount: number): Array<{ scale: number; quality: number }> {
   if (pageCount <= 5) return [...REDACTION_RENDER_PROFILES];
   if (pageCount <= 10) {
@@ -709,7 +758,18 @@ async function createRedactedSegibuFile(file: File, additionalTerms: string): Pr
 
   const manualTerms = normalizeManualTerms(additionalTerms);
   const allBoxes = pages.flatMap((pageData) => pageData.boxes);
+  if (allBoxes.length === 0) {
+    throw new Error('이 PDF는 텍스트 레이어를 찾지 못했습니다. 스캔본은 현재 자동 분석할 수 없으므로 OCR 후 텍스트 붙여넣기 방식으로 진행해 주세요.');
+  }
   const dynamic = collectDynamicRedactionZones(allBoxes, manualTerms);
+  const sanitizedText = buildSanitizedSegibuText(pages, dynamic.zonesByPage);
+  const sanitizedTextBytes = new TextEncoder().encode(sanitizedText).byteLength;
+  if (sanitizedText.trim().length < 100) {
+    throw new Error('비식별 처리 후 분석 가능한 텍스트가 너무 적습니다. 원본 PDF의 텍스트 복사 가능 여부를 확인하거나 텍스트 붙여넣기 방식으로 진행해 주세요.');
+  }
+  if (sanitizedTextBytes > SEGIBU_TEXT_UPLOAD_LIMIT_BYTES) {
+    throw new Error(`비식별 텍스트가 ${formatBytes(sanitizedTextBytes)}로 전송 권장 한도 ${formatBytes(SEGIBU_TEXT_UPLOAD_LIMIT_BYTES)}를 초과했습니다. 학기별로 나누어 분석하거나 텍스트를 줄여 다시 시도해 주세요.`);
+  }
   const profiles = getRedactionProfiles(sourcePdf.numPages);
   let redactedBytes: Uint8Array | null = null;
   let usedProfile = profiles[profiles.length - 1];
@@ -718,12 +778,10 @@ async function createRedactedSegibuFile(file: File, additionalTerms: string): Pr
     const candidateBytes = await buildRedactedPdfBytes(sourcePdf, pages, dynamic, profile);
     redactedBytes = candidateBytes;
     usedProfile = profile;
-    if (candidateBytes.byteLength <= SEGIBU_UPLOAD_LIMIT_BYTES) break;
+    if (candidateBytes.byteLength <= 4 * 1024 * 1024) break;
   }
 
-  if (!redactedBytes || redactedBytes.byteLength > SEGIBU_UPLOAD_LIMIT_BYTES) {
-    throw new Error(`비식별 PDF가 ${formatBytes(redactedBytes?.byteLength ?? 0)}로 전송 한도 ${formatBytes(SEGIBU_UPLOAD_LIMIT_BYTES)}를 초과했습니다. 페이지가 많은 생기부는 텍스트 붙여넣기 방식으로 분석해 주세요.`);
-  }
+  if (!redactedBytes) throw new Error('PDF 비식별화 미리보기를 만들지 못했습니다.');
 
   const redactedArrayBuffer = redactedBytes.buffer.slice(
     redactedBytes.byteOffset,
@@ -733,14 +791,15 @@ async function createRedactedSegibuFile(file: File, additionalTerms: string): Pr
   const safeName = file.name.replace(/\.pdf$/i, '') || 'segibu';
   return {
     file: new File([blob], `${safeName}_비식별확인.pdf`, { type: 'application/pdf' }),
+    sanitizedText,
     summary: {
       pages: sourcePdf.numPages,
       textLayerFound: allBoxes.length > 0,
       autoCandidateCount: dynamic.candidates.filter((candidate) => candidate.source !== 'manual').length,
       manualCandidateCount: manualTerms.length,
       dynamicZoneCount: dynamic.dynamicZoneCount,
-      outputSizeBytes: redactedBytes.byteLength,
-      uploadLimitBytes: SEGIBU_UPLOAD_LIMIT_BYTES,
+      previewSizeBytes: redactedBytes.byteLength,
+      sanitizedTextChars: sanitizedText.length,
       renderScale: usedProfile.scale,
       jpegQuality: usedProfile.quality,
     },
@@ -1036,8 +1095,8 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
 }) {
   const [mode, setMode] = useState<'pdf' | 'text'>('pdf');
   const [file, setFile] = useState<File | null>(null);
-  const [redactedFile, setRedactedFile] = useState<File | null>(null);
   const [redactedUrl, setRedactedUrl] = useState<string | null>(null);
+  const [sanitizedPdfText, setSanitizedPdfText] = useState('');
   const [extraRedactionTerms, setExtraRedactionTerms] = useState('');
   const [redactionSummary, setRedactionSummary] = useState<RedactionBuildSummary | null>(null);
   const [redactionLoading, setRedactionLoading] = useState(false);
@@ -1048,13 +1107,13 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
   const ref = useRef<HTMLInputElement>(null);
 
   const canSubmit = mode === 'pdf'
-    ? Boolean(redactedFile && privacyConfirmed && !redactionLoading)
+    ? Boolean(sanitizedPdfText.trim().length > 100 && privacyConfirmed && !redactionLoading)
     : text.trim().length > 100 && privacyConfirmed;
 
   const clearRedactedPreview = useCallback(() => {
     if (redactedUrl) URL.revokeObjectURL(redactedUrl);
     setRedactedUrl(null);
-    setRedactedFile(null);
+    setSanitizedPdfText('');
     setRedactionSummary(null);
   }, [redactedUrl]);
 
@@ -1067,7 +1126,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
     setRedactionLoading(true);
     try {
       const redacted = await createRedactedSegibuFile(nextFile, extraRedactionTerms);
-      setRedactedFile(redacted.file);
+      setSanitizedPdfText(redacted.sanitizedText);
       setRedactionSummary(redacted.summary);
       setRedactedUrl(URL.createObjectURL(redacted.file));
     } catch (e) {
@@ -1124,7 +1183,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
               <polyline points="9 15 12 12 15 15" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <div style={{ fontSize: 15, fontWeight: 600, color: T.textMuted }}>{file ? file.name : '생기부 PDF를 끌어다 놓거나 클릭해 선택'}</div>
-            <div style={{ fontSize: 13, color: T.textSubtle }}>원본 최대 20MB · 분석 전송용 PDF는 자동으로 4MB 이하 압축</div>
+            <div style={{ fontSize: 13, color: T.textSubtle }}>PDF는 서버에 보내지 않고, 브라우저에서 비식별 텍스트만 추출해 분석</div>
           </div>
           <input ref={ref} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) void handlePdfFile(f); }} />
           {file && (
@@ -1158,7 +1217,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
               <div style={{ padding: '11px 14px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>비식별화 미리보기</div>
-                  <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 2 }}>1페이지 개인정보·사진, 전체 하단 출력정보를 고정 마스킹하고 학교·기관명·이름 후보는 텍스트 좌표로 2차 마스킹합니다. 최종 파일은 원본 레이어가 없는 이미지 PDF입니다.</div>
+                  <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 2 }}>1페이지 개인정보·사진, 전체 하단 출력정보를 고정 마스킹하고 학교·기관명·이름 후보는 텍스트 좌표로 2차 마스킹합니다. 분석에는 PDF 파일이 아니라 비식별 텍스트만 전송합니다.</div>
                 </div>
                 {redactionLoading && <div style={{ fontSize: 12, fontWeight: 800, color: T.primary }}>처리 중...</div>}
               </div>
@@ -1170,14 +1229,14 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
                   {redactionSummary && (
                     <div style={{ padding: '9px 14px', borderTop: `1px solid ${T.border}`, fontSize: 12, color: T.textMuted, lineHeight: 1.5, background: '#fff' }}>
                       {redactionSummary.textLayerFound
-                        ? `${redactionSummary.pages}쪽 확인 · 전송 파일 ${formatBytes(redactionSummary.outputSizeBytes)} / ${formatBytes(redactionSummary.uploadLimitBytes)} · 자동 식별어 ${redactionSummary.autoCandidateCount}개 · 추가 식별어 ${redactionSummary.manualCandidateCount}개 · 2차 마스킹 영역 ${redactionSummary.dynamicZoneCount}개`
-                        : `${redactionSummary.pages}쪽 확인 · 전송 파일 ${formatBytes(redactionSummary.outputSizeBytes)} / ${formatBytes(redactionSummary.uploadLimitBytes)} · 텍스트 레이어를 찾지 못했습니다. 전체 미리보기와 추가 식별어를 더 꼼꼼히 확인하세요.`}
+                        ? `${redactionSummary.pages}쪽 확인 · 분석 텍스트 ${redactionSummary.sanitizedTextChars.toLocaleString()}자 · 미리보기 ${formatBytes(redactionSummary.previewSizeBytes)} · 자동 식별어 ${redactionSummary.autoCandidateCount}개 · 추가 식별어 ${redactionSummary.manualCandidateCount}개 · 2차 마스킹 영역 ${redactionSummary.dynamicZoneCount}개`
+                        : `${redactionSummary.pages}쪽 확인 · 텍스트 레이어를 찾지 못했습니다. OCR 후 텍스트 붙여넣기 방식으로 진행하세요.`}
                     </div>
                   )}
                   <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '12px 14px', borderTop: `1px solid ${T.border}`, cursor: 'pointer' }}>
                     <input type="checkbox" checked={privacyConfirmed} onChange={e => setPrivacyConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
                     <span style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.55 }}>
-                      전체 페이지 미리보기를 확인했으며, 남아 있는 민감정보가 있으면 원본 PDF를 수정한 뒤 다시 업로드하겠습니다.
+                      전체 페이지 미리보기와 비식별 처리 결과를 확인했으며, 남아 있는 민감정보가 있으면 추가 식별어를 입력하거나 원본 PDF를 수정한 뒤 다시 업로드하겠습니다.
                     </span>
                   </label>
                 </>
@@ -1215,7 +1274,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
       {error && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: T.dangerSoft, color: T.danger, fontSize: 14 }}>{error}</div>}
       <button
         onClick={() => {
-          if (mode === 'pdf' && redactedFile) onAnalyze(redactedFile);
+          if (mode === 'pdf' && sanitizedPdfText.trim()) onAnalyze(sanitizedPdfText.trim());
           else if (mode === 'text' && text.trim()) onAnalyze(text.trim());
         }}
         disabled={!canSubmit}

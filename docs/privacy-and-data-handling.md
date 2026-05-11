@@ -32,14 +32,15 @@ Student-record AI analysis is split into two layers:
 - Dashboard shows a privacy reminder before service tabs.
 - Student registration asks for a student label rather than a real name.
 - Student-record upload happens in the analysis tab after de-identification review, not during student registration.
-- The PDF upload flow creates a redacted image-only PDF preview for the current supported sample format and requires teacher confirmation before AI analysis.
+- The PDF upload flow creates a redacted preview locally in the browser for the current supported sample format and requires teacher confirmation before AI analysis.
+- The browser sends only de-identified extracted text to the analysis API. The redacted PDF preview file itself is not uploaded to the server in the default flow.
 - The redaction flow combines fixed high-risk zones, text-coordinate matching for high-confidence school/institution/name candidates, and teacher-entered extra identifiers.
 - Automatic redaction intentionally avoids broad keywords so non-identifying subjects and activity evidence remain available for counseling.
 - Text paste mode also requires direct-identifier removal confirmation.
 - Dashboard access is protected by NextAuth.
 - Student API routes require a valid session and teacher id.
 - AI routes require a valid session and teacher id.
-- Student-record and curriculum PDF AI routes reject missing files, non-PDF files, or files over 4MB before quota/model calls because Vercel Functions reject request bodies over 4.5MB.
+- Student-record text and curriculum PDF AI routes reject missing or oversized inputs before quota/model calls because Vercel Functions reject request bodies over 4.5MB.
 - Server routes use `SUPABASE_SERVICE_ROLE_KEY` when configured and still filter by `teacher_id`.
 - A soft per-teacher daily AI quota is applied in server memory:
   - `AI_DAILY_LIMIT_SEGIBU` default: 30

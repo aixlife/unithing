@@ -182,6 +182,7 @@ const GENERATION_CONFIG = {
 } as GenerationConfig;
 
 const MAX_SEGIBU_PDF_BYTES = 4 * 1024 * 1024;
+const MAX_SEGIBU_TEXT_BYTES = 3.5 * 1024 * 1024;
 
 const DEFAULT_READINESS: AdmissionsReadiness = {
   overall: '분석 결과를 바탕으로 대학 찾기, 과목 설계, 세특 보완을 순차적으로 진행해야 합니다.',
@@ -384,7 +385,10 @@ export async function POST(req: Request) {
       const body = await req.json();
       if (!body.text) return Response.json({ error: '텍스트가 없습니다' }, { status: 400 });
       if (body.privacyConfirmed !== true) return Response.json({ error: '개인정보 제거 확인이 필요합니다.' }, { status: 400 });
-      parts = [{ text: `[생기부 원문]\n${body.text}\n\n위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.` }];
+      if (Buffer.byteLength(body.text, 'utf8') > MAX_SEGIBU_TEXT_BYTES) {
+        return Response.json({ error: '비식별 텍스트가 너무 큽니다. 학기별로 나누어 분석하거나 텍스트를 줄여 다시 시도해 주세요.' }, { status: 400 });
+      }
+      parts = [{ text: `[비식별 생기부 텍스트]\n${body.text}\n\n위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.` }];
     } else {
       const formData = await req.formData();
       if (formData.get('privacyConfirmed') !== 'true') return Response.json({ error: '비식별화 확인이 필요합니다.' }, { status: 400 });

@@ -58,19 +58,19 @@ Current source constraint: there is one representative school curriculum table P
 
 **Scope**
 
-- Create a redacted preview file in the browser before upload.
-- Re-render each PDF page into an image-only PDF before upload so the original text/image layer is not preserved under white boxes.
+- Create a redacted preview file in the browser before analysis.
+- Do not upload the PDF file in the default flow. Extract de-identified text in the browser and send only that text to the analysis API.
 - Mask the first-page personal/academic-info/photo area and all-page footer/output area as fixed high-risk zones.
 - Run a second text-coordinate pass after fixed-zone detection: detect high-confidence school/institution names and fixed-zone name candidates, then mask matching text boxes across all pages.
 - Let the teacher add extra names, school abbreviations, teacher names, or institution names for full-document masking.
 - Avoid broad keyword masking. Subject names, activity descriptions, and ordinary counseling evidence should not be hidden unless they match a high-confidence identifier or an explicit teacher-added term.
 - Require teacher confirmation before analysis.
 - Require explicit confirmation for text paste mode.
-- Server rejects missing confirmation, non-PDF files, and PDFs over 4MB before quota is consumed. The browser compresses the redacted image-only PDF to stay below Vercel's 4.5MB function payload limit.
+- Server rejects missing confirmation and oversized text/PDF payloads before quota is consumed. The default browser flow avoids Vercel's 4.5MB function payload limit by not sending the PDF file.
 
 **Deliverable**
 
-- Redacted PDF preview in the `생기부 분석` upload flow.
+- Redacted local PDF preview and de-identified text extraction in the `생기부 분석` upload flow.
 - `privacyConfirmed` gate in `/api/analyze/segibu`.
 - Raw record and AI source text panels replaced by privacy lock panels.
 
@@ -80,6 +80,7 @@ Current source constraint: there is one representative school curriculum table P
   - first page personal table/photo block is masked while the title remains
   - all-page footer/output area is masked
   - second-pass school/institution/name candidates are masked by text coordinate
+  - analysis request sends de-identified text, not the PDF file
   - subject names, activity contents, and other non-identifying counseling evidence remain visible
 - Paid Gemini validation is pending. When run, limit it to one student-record readability check and record the result without exposing student content.
 
