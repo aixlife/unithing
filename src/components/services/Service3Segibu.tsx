@@ -302,6 +302,10 @@ type RedactionBuildSummary = {
   autoCandidateCount: number;
   manualCandidateCount: number;
   dynamicZoneCount: number;
+  outputSizeBytes: number;
+  uploadLimitBytes: number;
+  renderScale: number;
+  jpegQuality: number;
 };
 
 type RedactedSegibuResult = {
@@ -341,9 +345,15 @@ type PdfDocumentProxyLike = {
 };
 
 const PDFJS_WORKER_SRC = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
-const REDACTION_RENDER_SCALE = 1.8;
+const SEGIBU_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const REDACTION_PADDING = 0.004;
 const DYNAMIC_REDACTION_PADDING = 0.006;
+const REDACTION_RENDER_PROFILES = [
+  { scale: 1.45, quality: 0.8 },
+  { scale: 1.25, quality: 0.72 },
+  { scale: 1.05, quality: 0.64 },
+  { scale: 0.9, quality: 0.56 },
+] as const;
 const IDENTIFIER_STOPWORDS = new Set([
   '학년', '학기', '학과', '구분', '번호', '성명', '담임성명', '졸업대장번호', '수상명', '등급', '수상연월일',
   '참가대상', '수강자', '특기사항', '결과', '출결상황', '자격증', '인증', '취득상황', '해당사항없음',
@@ -613,38 +623,49 @@ function drawRedactionZones(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEle
   ctx.restore();
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  return `${Math.ceil(bytes / 1024)}KB`;
+}
+
+function getRedactionProfiles(pageCount: number): Array<{ scale: number; quality: number }> {
+  if (pageCount <= 5) return [...REDACTION_RENDER_PROFILES];
+  if (pageCount <= 10) {
+    return [
+      { scale: 1.25, quality: 0.72 },
+      { scale: 1.1, quality: 0.66 },
+      { scale: 0.95, quality: 0.58 },
+      { scale: 0.82, quality: 0.52 },
+    ];
+  }
+  return [
+    { scale: 1.1, quality: 0.66 },
+    { scale: 0.95, quality: 0.58 },
+    { scale: 0.82, quality: 0.52 },
+    { scale: 0.72, quality: 0.48 },
+  ];
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
       else reject(new Error('PDF 페이지 이미지를 만들지 못했습니다.'));
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', quality);
   });
 }
 
-async function createRedactedSegibuFile(file: File, additionalTerms: string): Promise<RedactedSegibuResult> {
-  const source = new Uint8Array(await file.arrayBuffer());
-  const pdfjs = await import('pdfjs-dist');
-  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
-
-  const sourcePdf = await (pdfjs.getDocument({ data: source.slice() }) as unknown as { promise: Promise<PdfDocumentProxyLike> }).promise;
+async function buildRedactedPdfBytes(
+  sourcePdf: PdfDocumentProxyLike,
+  pages: Array<{ page: PdfPageProxyLike; pdfViewport: PdfViewportLike; boxes: TextBox[] }>,
+  dynamic: ReturnType<typeof collectDynamicRedactionZones>,
+  profile: { scale: number; quality: number },
+): Promise<Uint8Array> {
   const outputPdf = await PDFDocument.create();
-  const pages: Array<{ page: PdfPageProxyLike; pdfViewport: PdfViewportLike; boxes: TextBox[] }> = [];
-
-  for (let pageIndex = 0; pageIndex < sourcePdf.numPages; pageIndex += 1) {
-    const page = await sourcePdf.getPage(pageIndex + 1);
-    const pdfViewport = page.getViewport({ scale: 1 });
-    const boxes = await extractPageTextBoxes(page, pageIndex, pdfViewport);
-    pages.push({ page, pdfViewport, boxes });
-  }
-
-  const manualTerms = normalizeManualTerms(additionalTerms);
-  const allBoxes = pages.flatMap((pageData) => pageData.boxes);
-  const dynamic = collectDynamicRedactionZones(allBoxes, manualTerms);
 
   for (let pageIndex = 0; pageIndex < sourcePdf.numPages; pageIndex += 1) {
     const { page: sourcePage, pdfViewport } = pages[pageIndex];
-    const renderViewport = sourcePage.getViewport({ scale: REDACTION_RENDER_SCALE });
+    const renderViewport = sourcePage.getViewport({ scale: profile.scale });
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(renderViewport.width);
     canvas.height = Math.ceil(renderViewport.height);
@@ -659,7 +680,7 @@ async function createRedactedSegibuFile(file: File, additionalTerms: string): Pr
       ...(dynamic.zonesByPage.get(pageIndex) ?? []),
     ]);
 
-    const imageBlob = await canvasToBlob(canvas);
+    const imageBlob = await canvasToBlob(canvas, profile.quality);
     const imageBytes = await imageBlob.arrayBuffer();
     const image = await outputPdf.embedJpg(imageBytes);
     const outputPage = outputPdf.addPage([pdfViewport.width, pdfViewport.height]);
@@ -668,7 +689,42 @@ async function createRedactedSegibuFile(file: File, additionalTerms: string): Pr
     canvas.height = 0;
   }
 
-  const redactedBytes = await outputPdf.save();
+  return outputPdf.save();
+}
+
+async function createRedactedSegibuFile(file: File, additionalTerms: string): Promise<RedactedSegibuResult> {
+  const source = new Uint8Array(await file.arrayBuffer());
+  const pdfjs = await import('pdfjs-dist');
+  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+
+  const sourcePdf = await (pdfjs.getDocument({ data: source.slice() }) as unknown as { promise: Promise<PdfDocumentProxyLike> }).promise;
+  const pages: Array<{ page: PdfPageProxyLike; pdfViewport: PdfViewportLike; boxes: TextBox[] }> = [];
+
+  for (let pageIndex = 0; pageIndex < sourcePdf.numPages; pageIndex += 1) {
+    const page = await sourcePdf.getPage(pageIndex + 1);
+    const pdfViewport = page.getViewport({ scale: 1 });
+    const boxes = await extractPageTextBoxes(page, pageIndex, pdfViewport);
+    pages.push({ page, pdfViewport, boxes });
+  }
+
+  const manualTerms = normalizeManualTerms(additionalTerms);
+  const allBoxes = pages.flatMap((pageData) => pageData.boxes);
+  const dynamic = collectDynamicRedactionZones(allBoxes, manualTerms);
+  const profiles = getRedactionProfiles(sourcePdf.numPages);
+  let redactedBytes: Uint8Array | null = null;
+  let usedProfile = profiles[profiles.length - 1];
+
+  for (const profile of profiles) {
+    const candidateBytes = await buildRedactedPdfBytes(sourcePdf, pages, dynamic, profile);
+    redactedBytes = candidateBytes;
+    usedProfile = profile;
+    if (candidateBytes.byteLength <= SEGIBU_UPLOAD_LIMIT_BYTES) break;
+  }
+
+  if (!redactedBytes || redactedBytes.byteLength > SEGIBU_UPLOAD_LIMIT_BYTES) {
+    throw new Error(`비식별 PDF가 ${formatBytes(redactedBytes?.byteLength ?? 0)}로 전송 한도 ${formatBytes(SEGIBU_UPLOAD_LIMIT_BYTES)}를 초과했습니다. 페이지가 많은 생기부는 텍스트 붙여넣기 방식으로 분석해 주세요.`);
+  }
+
   const redactedArrayBuffer = redactedBytes.buffer.slice(
     redactedBytes.byteOffset,
     redactedBytes.byteOffset + redactedBytes.byteLength,
@@ -683,6 +739,10 @@ async function createRedactedSegibuFile(file: File, additionalTerms: string): Pr
       autoCandidateCount: dynamic.candidates.filter((candidate) => candidate.source !== 'manual').length,
       manualCandidateCount: manualTerms.length,
       dynamicZoneCount: dynamic.dynamicZoneCount,
+      outputSizeBytes: redactedBytes.byteLength,
+      uploadLimitBytes: SEGIBU_UPLOAD_LIMIT_BYTES,
+      renderScale: usedProfile.scale,
+      jpegQuality: usedProfile.quality,
     },
   };
 }
@@ -1010,8 +1070,8 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
       setRedactedFile(redacted.file);
       setRedactionSummary(redacted.summary);
       setRedactedUrl(URL.createObjectURL(redacted.file));
-    } catch {
-      setRedactionError('PDF 비식별화 미리보기를 만들지 못했습니다. 파일이 암호화되어 있거나 표준 PDF가 아닐 수 있습니다.');
+    } catch (e) {
+      setRedactionError(e instanceof Error ? e.message : 'PDF 비식별화 미리보기를 만들지 못했습니다. 파일이 암호화되어 있거나 표준 PDF가 아닐 수 있습니다.');
     } finally {
       setRedactionLoading(false);
     }
@@ -1064,7 +1124,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
               <polyline points="9 15 12 12 15 15" stroke={T.textSubtle} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <div style={{ fontSize: 15, fontWeight: 600, color: T.textMuted }}>{file ? file.name : '생기부 PDF를 끌어다 놓거나 클릭해 선택'}</div>
-            <div style={{ fontSize: 13, color: T.textSubtle }}>최대 20MB · PDF만 가능</div>
+            <div style={{ fontSize: 13, color: T.textSubtle }}>원본 최대 20MB · 분석 전송용 PDF는 자동으로 4MB 이하 압축</div>
           </div>
           <input ref={ref} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) void handlePdfFile(f); }} />
           {file && (
@@ -1110,8 +1170,8 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
                   {redactionSummary && (
                     <div style={{ padding: '9px 14px', borderTop: `1px solid ${T.border}`, fontSize: 12, color: T.textMuted, lineHeight: 1.5, background: '#fff' }}>
                       {redactionSummary.textLayerFound
-                        ? `${redactionSummary.pages}쪽 확인 · 자동 식별어 ${redactionSummary.autoCandidateCount}개 · 추가 식별어 ${redactionSummary.manualCandidateCount}개 · 2차 마스킹 영역 ${redactionSummary.dynamicZoneCount}개`
-                        : `${redactionSummary.pages}쪽 확인 · 텍스트 레이어를 찾지 못했습니다. 전체 미리보기와 추가 식별어를 더 꼼꼼히 확인하세요.`}
+                        ? `${redactionSummary.pages}쪽 확인 · 전송 파일 ${formatBytes(redactionSummary.outputSizeBytes)} / ${formatBytes(redactionSummary.uploadLimitBytes)} · 자동 식별어 ${redactionSummary.autoCandidateCount}개 · 추가 식별어 ${redactionSummary.manualCandidateCount}개 · 2차 마스킹 영역 ${redactionSummary.dynamicZoneCount}개`
+                        : `${redactionSummary.pages}쪽 확인 · 전송 파일 ${formatBytes(redactionSummary.outputSizeBytes)} / ${formatBytes(redactionSummary.uploadLimitBytes)} · 텍스트 레이어를 찾지 못했습니다. 전체 미리보기와 추가 식별어를 더 꼼꼼히 확인하세요.`}
                     </div>
                   )}
                   <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '12px 14px', borderTop: `1px solid ${T.border}`, cursor: 'pointer' }}>

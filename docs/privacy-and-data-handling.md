@@ -39,7 +39,7 @@ Student-record AI analysis is split into two layers:
 - Dashboard access is protected by NextAuth.
 - Student API routes require a valid session and teacher id.
 - AI routes require a valid session and teacher id.
-- Student-record and curriculum PDF AI routes reject missing files, non-PDF files, or files over 20MB before quota/model calls.
+- Student-record and curriculum PDF AI routes reject missing files, non-PDF files, or files over 4MB before quota/model calls because Vercel Functions reject request bodies over 4.5MB.
 - Server routes use `SUPABASE_SERVICE_ROLE_KEY` when configured and still filter by `teacher_id`.
 - A soft per-teacher daily AI quota is applied in server memory:
   - `AI_DAILY_LIMIT_SEGIBU` default: 30

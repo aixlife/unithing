@@ -66,7 +66,7 @@ Current source constraint: there is one representative school curriculum table P
 - Avoid broad keyword masking. Subject names, activity descriptions, and ordinary counseling evidence should not be hidden unless they match a high-confidence identifier or an explicit teacher-added term.
 - Require teacher confirmation before analysis.
 - Require explicit confirmation for text paste mode.
-- Server rejects missing confirmation, non-PDF files, and PDFs over 20MB before quota is consumed.
+- Server rejects missing confirmation, non-PDF files, and PDFs over 4MB before quota is consumed. The browser compresses the redacted image-only PDF to stay below Vercel's 4.5MB function payload limit.
 
 **Deliverable**
 

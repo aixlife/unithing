@@ -12,7 +12,7 @@ type ParsedGroup = {
 };
 
 const MANDATORY_KEYS = ['2-1', '2-2', '3-1', '3-2'] as const;
-const MAX_CURRICULUM_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_CURRICULUM_PDF_BYTES = 4 * 1024 * 1024;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
   if (!file) return Response.json({ error: '파일이 없습니다.' }, { status: 400 });
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   if (!isPdf) return Response.json({ error: 'PDF 파일만 추출할 수 있습니다.' }, { status: 400 });
-  if (file.size > MAX_CURRICULUM_PDF_BYTES) return Response.json({ error: 'PDF는 20MB 이하만 추출할 수 있습니다.' }, { status: 400 });
+  if (file.size > MAX_CURRICULUM_PDF_BYTES) return Response.json({ error: 'PDF는 4MB 이하만 추출할 수 있습니다.' }, { status: 400 });
 
   const quota = checkAiQuota('subjects', teacherId);
   if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });

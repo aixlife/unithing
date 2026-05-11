@@ -181,7 +181,7 @@ const GENERATION_CONFIG = {
   thinkingConfig: { thinkingBudget: 0 },
 } as GenerationConfig;
 
-const MAX_SEGIBU_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_SEGIBU_PDF_BYTES = 4 * 1024 * 1024;
 
 const DEFAULT_READINESS: AdmissionsReadiness = {
   overall: '분석 결과를 바탕으로 대학 찾기, 과목 설계, 세특 보완을 순차적으로 진행해야 합니다.',
@@ -392,7 +392,7 @@ export async function POST(req: Request) {
       if (!file) return Response.json({ error: '파일이 없습니다' }, { status: 400 });
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       if (!isPdf) return Response.json({ error: 'PDF 파일만 분석할 수 있습니다.' }, { status: 400 });
-      if (file.size > MAX_SEGIBU_PDF_BYTES) return Response.json({ error: 'PDF는 20MB 이하만 분석할 수 있습니다.' }, { status: 400 });
+      if (file.size > MAX_SEGIBU_PDF_BYTES) return Response.json({ error: '전송용 PDF가 4MB를 초과했습니다. 페이지가 많은 생기부는 텍스트 붙여넣기 방식으로 분석해 주세요.' }, { status: 400 });
       const bytes = await file.arrayBuffer();
       const base64 = Buffer.from(bytes).toString('base64');
       parts = [

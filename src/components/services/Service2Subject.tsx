@@ -33,6 +33,7 @@ const T = {
   shadowLg: '0 8px 24px rgba(0,0,0,0.06)',
 };
 const FONT = "'Pretendard Variable', Pretendard, sans-serif";
+const CURRICULUM_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 
 // ---- Inline SVG Icons ----
 const IconSearch = () => (
@@ -350,6 +351,10 @@ export function Service2Subject() {
 
   const handleCurriculumPdf = async (file: File | null) => {
     if (!file) return;
+    if (file.size > CURRICULUM_UPLOAD_LIMIT_BYTES) {
+      setCurriculumParseMessage('PDF는 4MB 이하만 추출할 수 있습니다. 용량을 줄인 편제표 PDF로 다시 시도하세요.');
+      return;
+    }
     setCurriculumParseLoading(true);
     setCurriculumParseMessage(null);
     setCurriculumParseNotes([]);
