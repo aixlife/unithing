@@ -4,9 +4,6 @@ import { SegibuAnalysis } from '@/types/analysis';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 
 const T = {
   primary: '#1B64DA', primarySoft: '#EBF2FF', primaryBorder: '#CFDFFB',
@@ -46,10 +43,6 @@ function toText(value: unknown): string {
   if (Array.isArray(value)) return value.map(toText).filter(Boolean).join('\n');
   if (typeof value === 'object') return Object.values(value).map(toText).filter(Boolean).join('\n');
   return String(value);
-}
-
-function collectRecordTexts(record: Record<string, { y1: string; y2: string; y3: string }>): string[] {
-  return Object.values(record).flatMap(item => [item.y1, item.y2, item.y3]);
 }
 
 // ── 키워드 추출 ───────────────────────────────────────────────────────────────
@@ -155,7 +148,6 @@ function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['a
               <div key={`${item.competency}-${index}`} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', background: T.surfaceAlt, borderTop: `3px solid ${comp.color}` }}>
                 <div style={{ fontSize: 11, color: comp.color, fontWeight: 800, letterSpacing: '0.04em', marginBottom: 5, fontFamily: FONT }}>{COMP_LABELS[item.competency]} 보완</div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.45, marginBottom: 6, fontFamily: FONT }}>{item.issue}</div>
-                <p style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, margin: '0 0 6px', fontFamily: FONT }}>{item.evidence}</p>
                 <p style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>{item.recommendation}</p>
               </div>
             );
@@ -189,6 +181,24 @@ function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['a
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function PrivacyLockedPanel({ label = '원본 기록' }: { label?: string }) {
+  return (
+    <div style={{ position: 'relative', minHeight: 132, border: `1px solid ${T.border}`, borderRadius: 10, background: T.surfaceAlt, overflow: 'hidden', marginBottom: 12 }}>
+      <div style={{ padding: '14px 16px' }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.textSubtle, marginBottom: 10, fontFamily: FONT }}>{label}</div>
+        {[0, 1, 2, 3].map((idx) => (
+          <div key={idx} style={{ height: 12, width: `${90 - idx * 11}%`, borderRadius: 999, background: idx % 2 ? '#DDE3EA' : '#CBD5E1', marginBottom: 10, filter: 'blur(4px)', opacity: 0.35 }} />
+        ))}
+      </div>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16, textAlign: 'center', background: 'rgba(248,250,252,0.76)' }}>
+        <div style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.surface, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, color: T.textMuted, fontFamily: FONT }}>LOCK</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.text, fontFamily: FONT }}>개인정보 보호 잠금</div>
+        <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.5, fontFamily: FONT }}>생기부 원문과 원문 인용은 저장·출력하지 않습니다.</div>
+      </div>
     </div>
   );
 }
@@ -244,7 +254,6 @@ function buildMarkdownReport(r: SegibuAnalysis, studentName: string, keywords: {
       '',
       ...readiness.criticalWeaknesses.flatMap(item => [
         `- ${COMP_LABELS[item.competency]}: ${item.issue}`,
-        `  - 근거: ${item.evidence}`,
         `  - 처방: ${item.recommendation}`,
       ]),
       '',
@@ -260,23 +269,19 @@ function buildMarkdownReport(r: SegibuAnalysis, studentName: string, keywords: {
     );
   }
 
-  lines.push('', '## 심층 분석 리포트', '', r.report || '-');
+  lines.push('', '## 개인정보 보호 메모', '', '생기부 원문, 원문 인용, AI 분석 원문은 저장/출력 파일에서 제외했습니다.');
   return lines.join('\n');
 }
 
 // 연도 탭 + 텍스트 + 하이라이트 뷰
 function YearTabView({
-  raw,
   hl,
 }: {
-  raw: { y1: string; y2: string; y3: string };
   hl: { y1: { academic: string; career: string; community: string }; y2: { academic: string; career: string; community: string }; y3: { academic: string; career: string; community: string } };
 }) {
   const [year, setYear] = useState<'y1' | 'y2' | 'y3'>('y1');
   const yearLabel = { y1: '1학년', y2: '2학년', y3: '3학년' };
-  const text = raw[year];
   const h = hl[year];
-  const hasContent = text?.trim();
 
   return (
     <div>
@@ -290,22 +295,14 @@ function YearTabView({
         ))}
       </div>
 
-      {!hasContent ? (
-        <p style={{ fontSize: 13, color: T.textSubtle, fontStyle: 'italic', fontFamily: FONT }}>해당 학년 내용 없음</p>
-      ) : (
-        <>
-          <div style={{ background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
-            <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.75, margin: 0, fontFamily: FONT, whiteSpace: 'pre-line' }}>{text}</p>
-          </div>
-          {(h.academic || h.career || h.community) && (
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: T.textSubtle, letterSpacing: '0.06em', margin: '0 0 6px', fontFamily: FONT }}>역량 하이라이트</p>
-              <HighlightPill label="학업역량" text={h.academic} color={T.comp.academic.color} soft={T.comp.academic.soft} />
-              <HighlightPill label="진로역량" text={h.career}   color={T.comp.career.color}   soft={T.comp.career.soft} />
-              <HighlightPill label="공동체역량" text={h.community} color={T.comp.community.color} soft={T.comp.community.soft} />
-            </div>
-          )}
-        </>
+      <PrivacyLockedPanel />
+      {(h.academic || h.career || h.community) && (
+        <div>
+          <p style={{ fontSize: 11, fontWeight: 700, color: T.textSubtle, letterSpacing: '0.06em', margin: '0 0 6px', fontFamily: FONT }}>역량 하이라이트</p>
+          <HighlightPill label="학업역량" text={h.academic} color={T.comp.academic.color} soft={T.comp.academic.soft} />
+          <HighlightPill label="진로역량" text={h.career}   color={T.comp.career.color}   soft={T.comp.career.soft} />
+          <HighlightPill label="공동체역량" text={h.community} color={T.comp.community.color} soft={T.comp.community.soft} />
+        </div>
       )}
     </div>
   );
@@ -365,15 +362,12 @@ export function StudentReportView({
   const resolvedStudentName = studentName ?? r.studentName ?? '학생';
   const avg3 = Math.round((r.scores.academic + r.scores.career + r.scores.community) / 3);
 
-  // 키워드: structuredData 전체 텍스트에서 추출
+  // 키워드: 저장 가능한 상담 요약 텍스트에서만 추출
   const allTexts = [
-    ...collectRecordTexts(r.structuredData.changche),
-    ...collectRecordTexts(r.structuredData.curriculum),
-    r.structuredData.behavior.y1, r.structuredData.behavior.y2, r.structuredData.behavior.y3,
     r.summaryHighlights.academic, r.summaryHighlights.career, r.summaryHighlights.community,
     toText(r.futureStrategy.deepDive), toText(r.futureStrategy.subjects),
     readiness?.overall,
-    ...(readiness?.criticalWeaknesses.flatMap(item => [item.issue, item.evidence, item.recommendation]) ?? []),
+    ...(readiness?.criticalWeaknesses.flatMap(item => [item.issue, item.recommendation]) ?? []),
   ].filter((text): text is string => Boolean(text));
   const keywords = extractKeywords(allTexts);
 
@@ -539,7 +533,6 @@ export function StudentReportView({
             ))}
           </div>
           <YearTabView
-            raw={r.structuredData.changche[changcheTab]}
             hl={r.highlights.changche[changcheTab]}
           />
         </div>
@@ -554,7 +547,6 @@ export function StudentReportView({
             ))}
           </div>
           <YearTabView
-            raw={r.structuredData.curriculum[curriculumTab]}
             hl={r.highlights.curriculum[curriculumTab]}
           />
         </div>
@@ -565,7 +557,6 @@ export function StudentReportView({
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 16, fontFamily: FONT }}>행동 특성 및 종합 의견</div>
           <YearTabView
-            raw={r.structuredData.behavior}
             hl={r.highlights.behavior}
           />
         </div>
@@ -602,12 +593,7 @@ export function StudentReportView({
             })}
           </div>
 
-          {/* Full markdown report */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px' }}>
-            <div className="segibu-report" style={{ fontSize: 15, lineHeight: 1.8, color: T.text, fontFamily: FONT }}>
-              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{r.report}</Markdown>
-            </div>
-          </div>
+          <PrivacyLockedPanel label="AI 분석 원문" />
         </div>
       )}
     </div>

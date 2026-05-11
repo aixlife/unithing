@@ -1,15 +1,13 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 
 const GRADES = ['1학년', '2학년', '3학년'];
 
 export function StudentModal({ onClose }: { onClose: () => void }) {
-  const { addStudent, analyzeSegibu } = useStudent();
+  const { addStudent } = useStudent();
   const [form, setForm] = useState({ name: '', grade: '1학년', school: '', target_dept: '' });
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [step, setStep] = useState<'idle' | 'saving' | 'analyzing'>('idle');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<'idle' | 'saving'>('idle');
 
   const handle = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
   const loading = step !== 'idle';
@@ -17,10 +15,7 @@ export function StudentModal({ onClose }: { onClose: () => void }) {
   const submit = async () => {
     if (!form.name.trim() || loading) return;
     setStep('saving');
-    const newStudent = await addStudent({ ...form, naesin_data: null, segibu_pdf_url: null });
-    if (pdfFile && newStudent) {
-      analyzeSegibu(pdfFile, newStudent); // fire-and-forget — 모달 닫은 후 Service3가 진행 표시
-    }
+    await addStudent({ ...form, naesin_data: null, segibu_pdf_url: null });
     onClose();
   };
 
@@ -38,7 +33,7 @@ export function StudentModal({ onClose }: { onClose: () => void }) {
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#191F28', margin: '0 0 20px' }}>학생 등록</h2>
 
         {[
-          { label: '이름', key: 'name', placeholder: '홍길동' },
+          { label: '학생 구분명', key: 'name', placeholder: '1번 / A학생 / 별칭' },
           { label: '학교', key: 'school', placeholder: '○○고등학교' },
           { label: '희망 학과', key: 'target_dept', placeholder: '컴퓨터공학과' },
         ].map(f => (
@@ -73,54 +68,8 @@ export function StudentModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div style={{ marginBottom: 22 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: '#4E5968', display: 'block', marginBottom: 6 }}>
-            생기부 PDF
-            <span style={{ fontWeight: 400, color: '#8B95A1', marginLeft: 6 }}>선택 — 등록과 동시에 분석</span>
-          </label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf"
-            style={{ display: 'none' }}
-            onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
-          />
-          <div
-            onClick={() => !loading && fileRef.current?.click()}
-            style={{
-              border: `1px dashed ${pdfFile ? '#1B64DA' : '#D1D5DB'}`,
-              borderRadius: 8, padding: '11px 14px', cursor: loading ? 'default' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 10,
-              background: pdfFile ? '#F0F5FF' : '#FAFAFA',
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                stroke={pdfFile ? '#1B64DA' : '#8B95A1'} strokeWidth="2" fill="none"/>
-              <path d="M14 2v6h6" stroke={pdfFile ? '#1B64DA' : '#8B95A1'} strokeWidth="2"/>
-            </svg>
-            <span style={{
-              fontSize: 13, color: pdfFile ? '#1B64DA' : '#8B95A1',
-              flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {pdfFile ? pdfFile.name : 'PDF 파일 선택'}
-            </span>
-            {pdfFile && !loading && (
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setPdfFile(null);
-                  if (fileRef.current) fileRef.current.value = '';
-                }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8B95A1', fontSize: 16, padding: 0 }}
-              >✕</button>
-            )}
-          </div>
-          {step === 'analyzing' && (
-            <p style={{ fontSize: 12, color: '#1B64DA', marginTop: 6, margin: '6px 0 0' }}>
-              AI가 생기부를 분석하고 있습니다. 약 20~30초 소요됩니다...
-            </p>
-          )}
+        <div style={{ marginBottom: 22, padding: '10px 12px', borderRadius: 8, background: '#F8FAFC', border: '1px solid #E5E8EB', color: '#4E5968', fontSize: 12.5, lineHeight: 1.55 }}>
+          실명 대신 번호나 별칭을 권장합니다. 생기부 PDF는 학생 등록 후 <strong>생기부 분석</strong> 탭에서 비식별화 확인을 거쳐 업로드합니다.
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>

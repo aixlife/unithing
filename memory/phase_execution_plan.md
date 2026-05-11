@@ -3,6 +3,7 @@ name: UNITHING Phase Execution Plan
 description: 원본 5개 서비스 통합 완료를 위한 실행 순서와 검수 기준
 type: project
 updated: 2026-04-28
+updated_post_meeting: 2026-05-12
 ---
 
 # UNITHING Phase Execution Plan
@@ -32,6 +33,7 @@ updated: 2026-04-28
 - Supabase teachers/students 기반 학생 관리
 - 학생 선택/등록/삭제
 - 생기부 분석 결과를 `students.segibu_analysis`에 저장하고 새로고침 후 복원
+- 생기부 분석 저장본은 원문/직접 인용/원문 추출 구조를 제거한 상담 요약본으로 저장
 - Service3 생기부 분석 API 연동
 - Service4 세특 도우미 API 연동
 - Service1 대학 찾기 API와 입결 JSON 연결
@@ -50,8 +52,9 @@ updated: 2026-04-28
 ### 주의할 현재 한계
 
 - 카카오 로그인은 버튼만 있고 provider 미연동
-- Service2의 교육과정 PDF AI 파싱 기능은 remix 버전에 있었고 현재 통합본에는 없음
+- Service2의 교육과정 PDF AI 파싱 기능은 대표 편제표 1종 기준으로 1차 복원됨
 - 원본 학생부 리포트 앱의 Excel 다운로드, 누적 분석, D3 워드클라우드는 축소됨
+- 생기부 원문/AI 원문 인용 저장은 개인정보 보호를 위해 제외됨
 - 생기부 분석 프롬프트는 대학 가이드북 철학을 반영하지만 RAG 방식으로 PDF 원문을 직접 검색하지는 않음
 - 세특 PDF 자료 전체를 RAG/reference snippet으로 검색하는 구조는 아직 없음
 - Supabase schema/RLS 기준과 baseline migration은 추가됐지만 production 적용 확인은 아직 필요함
@@ -438,6 +441,48 @@ updated: 2026-04-28
 - 교과/활동/학년 key의 영어·한국어 alias를 함께 처리하도록 함.
 - 세부 기록: [Phase 1 Analysis Report](../docs/phase-1-analysis-report.md)
 
+## Phase 7-12 — 회의 후 개인정보·편제표·공개 준비 재정렬
+
+**상태:** 진행 중 — 2026-05-12
+
+**목표:** 2026-05-06 회의 피드백과 AI Council 검토를 반영해 무료 공개 전 리스크를 줄인다.
+
+### Phase 구성
+
+- Phase 7: 생기부 분석 저장 정책 분리
+  - 목적: 세션 분석과 DB 저장본을 분리
+  - 산출물: 저장 전 `sanitizeSegibuAnalysisForStorage`
+  - 검수: 저장본에 원문, 직접 인용, 구조화 원문, AI 응답의 학생명/학교명 없음
+- Phase 8: 학생 등록 단계 식별정보 최소화
+  - 목적: 실명 입력과 PDF 조기 업로드 방지
+  - 산출물: 학생 구분명/별칭 중심 등록 UI
+  - 검수: 등록 모달에 생기부 PDF 업로드 없음
+- Phase 9: 생기부 PDF 비식별 확인 업로드
+  - 목적: AI 전송 전 교사 확인 게이트 추가
+  - 산출물: 비식별 PDF 미리보기, 확인 체크박스, 서버 `privacyConfirmed` 검증
+  - 검수: 로컬 렌더 기준 첫 페이지 인적사항/수여기관/하단 출력정보 마스킹 확인
+- Phase 10: 편제표 PDF 추출 1종 기준 복원
+  - 목적: 현재 보유한 대표 편제표 1개를 기준으로 과목 입력 보조
+  - 산출물: `/api/parse/curriculum-pdf`, Service2 PDF 불러오기
+  - 검수: 실제 Gemini 1회로 추출 shape 검증, UI에서 수동 검수 후 적용
+- Phase 11: 공개 전 교사용 UX 안전장치
+  - 목적: 민감 작업, AI 호출, 상담 보조 성격을 명확히 표시
+  - 산출물: 대시보드 안내, 원문 잠금 패널, AI 호출 1회 사용 문구
+  - 검수: 교사가 어떤 시점에 AI 호출/전송이 발생하는지 알 수 있음
+- Phase 12: 비용·쿼터·릴리즈 게이트
+  - 목적: 실제 검증은 허용하되 무분별한 유료 호출 방지
+  - 산출물: 파일 형식/크기 사전 검증, 일일 AI quota 유지, 제한된 유료 검증 기록
+  - 검수: lint/build 통과, 유료 호출 횟수 보고
+
+### AI Council 반영 결정
+
+- 외부 AI에는 비식별 최소 맥락만 전송한다.
+- 원문 저장 분리와 편제표 1종 기준 복원을 먼저 한다.
+- 비용/쿼터 검증은 공개 직전에 미루지 말고 현재 phase에 포함한다.
+- 편제표 파싱은 다양한 학교 양식을 과장하지 않고 첫 양식 검수형 도구로 공개한다.
+
+세부 기록: [Phase 7-12 Post-Meeting Public Readiness](../docs/phase-7-12-post-meeting-public-readiness.md)
+
 ## 우선 작업 큐
 
 1. Phase 0 완료
@@ -455,6 +500,8 @@ updated: 2026-04-28
    - 상담 로드맵 탭 추가 및 저장/출력 연결
 7. Phase 6 완료
    - 운영 보안/쿼터/DB migration 기준선 추가
+8. Phase 7-12 진행 중
+   - 저장 정책 분리, 학생 구분명 UX, 비식별 PDF 업로드, 편제표 1종 파싱, 비용/공개 게이트
 
 ## 작업 원칙
 

@@ -15,6 +15,7 @@ const SEM_KEYS = ['s1_1', 's1_2', 's2_1', 's2_2', 's3_1', 'avg'] as const;
 const GRADE_KEYS = ['korean', 'math', 'english', 'social', 'science', 'others', 'total'] as const;
 const CHANGCHE_KEYS = ['individual', 'club', 'career_act'] as const;
 const CURRICULUM_KEYS = ['korean', 'math', 'english', 'social', 'science', 'liberal', 'arts_phys'] as const;
+const STORED_EVIDENCE_NOTICE = '원문 근거는 개인정보 보호를 위해 저장하지 않습니다. 상담 세션 중 비식별 확인본으로만 검토하세요.';
 
 const DEFAULT_READINESS: AdmissionsReadiness = {
   overall: '분석 결과를 바탕으로 대학 찾기, 과목 설계, 세특 보완을 순차적으로 진행해야 합니다.',
@@ -310,4 +311,67 @@ export function normalizeSegibuAnalysis(value: unknown): SegibuAnalysis | null {
     grade: toOptionalText(raw.grade),
     targetDept: toOptionalText(raw.targetDept),
   } as SegibuAnalysis;
+}
+
+function emptyYearData(): YearData {
+  return { y1: '', y2: '', y3: '' };
+}
+
+function emptyStructuredData(): SegibuAnalysis['structuredData'] {
+  return {
+    changche: CHANGCHE_KEYS.reduce((acc, key) => {
+      acc[key] = emptyYearData();
+      return acc;
+    }, {} as SegibuAnalysis['structuredData']['changche']),
+    curriculum: CURRICULUM_KEYS.reduce((acc, key) => {
+      acc[key] = emptyYearData();
+      return acc;
+    }, {} as SegibuAnalysis['structuredData']['curriculum']),
+    behavior: emptyYearData(),
+  };
+}
+
+function buildStoredReport(analysis: SegibuAnalysis) {
+  const readiness = analysis.admissionsReadiness;
+  return [
+    '# 상담 요약 리포트',
+    '',
+    '이 저장본은 개인정보 보호를 위해 생기부 원문, 원문 인용, 세부 원문 추출 데이터를 제외한 상담용 요약입니다.',
+    '',
+    '## 역량 요약',
+    '',
+    `- 학업역량: ${analysis.summaryHighlights.academic || '-'}`,
+    `- 진로역량: ${analysis.summaryHighlights.career || '-'}`,
+    `- 공동체역량: ${analysis.summaryHighlights.community || '-'}`,
+    '',
+    '## 상담 처방',
+    '',
+    readiness?.overall || '-',
+    '',
+    '## 향후 전략',
+    '',
+    `- 심화 탐구: ${analysis.futureStrategy.deepDive || '-'}`,
+    `- 연계 과목: ${analysis.futureStrategy.subjects || '-'}`,
+  ].join('\n');
+}
+
+export function sanitizeSegibuAnalysisForStorage(value: unknown): SegibuAnalysis | null {
+  const analysis = normalizeSegibuAnalysis(value);
+  if (!analysis) return null;
+  const readiness = analysis.admissionsReadiness ?? DEFAULT_READINESS;
+
+  return {
+    ...analysis,
+    report: buildStoredReport(analysis),
+    admissionsReadiness: {
+      ...readiness,
+      criticalWeaknesses: readiness.criticalWeaknesses.map((item) => ({
+        ...item,
+        evidence: STORED_EVIDENCE_NOTICE,
+      })),
+    },
+    structuredData: emptyStructuredData(),
+    studentName: undefined,
+    school: undefined,
+  };
 }

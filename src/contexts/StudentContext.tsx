@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { Student } from '@/lib/supabase';
-import { normalizeSegibuAnalysis } from '@/lib/segibuAnalysis';
+import { normalizeSegibuAnalysis, sanitizeSegibuAnalysisForStorage } from '@/lib/segibuAnalysis';
 import { SegibuAnalysis } from '@/types/analysis';
 
 type StudentCreate = Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'segibu_analysis'>;
@@ -17,6 +17,7 @@ type StudentContextType = {
   deleteStudent: (id: string) => Promise<void>;
   segibuAnalysis: SegibuAnalysis | null;
   analyzeSegibu: (input: File | string, studentOverride?: Student) => Promise<void>;
+  clearSegibuAnalysis: () => Promise<void>;
   analysisLoading: boolean;
   analysisError: string | null;
 };
@@ -53,14 +54,24 @@ export function StudentProvider({ children }: { children: ReactNode }) {
         res = await fetch('/api/analyze/segibu', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: input }),
+          body: JSON.stringify({ text: input, privacyConfirmed: true }),
         });
       } else {
         const form = new FormData();
         form.append('file', input);
+        form.append('privacyConfirmed', 'true');
         res = await fetch('/api/analyze/segibu', { method: 'POST', body: form });
       }
-      if (!res.ok) throw new Error((await res.json()).error ?? '분석 실패');
+      if (!res.ok) {
+        let message = '분석 실패';
+        try {
+          const payload = await res.json();
+          if (typeof payload?.error === 'string') message = payload.error;
+        } catch {
+          message = `분석 실패 (${res.status})`;
+        }
+        throw new Error(message);
+      }
       const data = normalizeSegibuAnalysis(await res.json());
       if (!data) throw new Error('분석 결과 형식이 올바르지 않습니다.');
 
@@ -68,10 +79,11 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       setManualAnalysis(data);
       setManualAnalysisStudentId(target?.id ?? null);
       if (target) {
+        const storedAnalysis = sanitizeSegibuAnalysisForStorage(data);
         const patchRes = await fetch(`/api/students/${target.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ segibu_analysis: data }),
+          body: JSON.stringify({ segibu_analysis: storedAnalysis }),
         });
         if (patchRes.ok) {
           const updated: Student = await patchRes.json();
@@ -80,9 +92,26 @@ export function StudentProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (e) {
-      setAnalysisError(String(e));
+      setAnalysisError(e instanceof Error ? e.message : String(e));
     } finally {
       setAnalysisLoading(false);
+    }
+  };
+
+  const clearSegibuAnalysis = async () => {
+    setManualAnalysis(null);
+    setManualAnalysisStudentId(null);
+    setAnalysisError(null);
+    if (!currentStudent) return;
+    const patchRes = await fetch(`/api/students/${currentStudent.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ segibu_analysis: null }),
+    });
+    if (patchRes.ok) {
+      const updated: Student = await patchRes.json();
+      setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+      setCurrentStudentState(updated);
     }
   };
 
@@ -152,7 +181,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     <StudentContext.Provider value={{
       students, currentStudent, setCurrentStudent, loadStudents,
       addStudent, updateStudent, deleteStudent,
-      segibuAnalysis, analyzeSegibu, analysisLoading, analysisError,
+      segibuAnalysis, analyzeSegibu, clearSegibuAnalysis, analysisLoading, analysisError,
     }}>
       {children}
     </StudentContext.Provider>

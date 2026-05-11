@@ -38,7 +38,7 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
    - 리포트 구성 시 각 항목(학업, 진로, 공동체) 내에서 반드시 다음의 가독성 구조를 엄격히 지키세요:
      1. 소제목은 '## 1. 학업 역량 (Academic Competency)'와 같이 작성하세요.
      2. 그 바로 아래에 '**우수한 점(Good)**'을 굵게 표시하고 반드시 한 줄을 띄우세요.
-     3. 그 아래에 구체적인 사례들을 리스트(-) 형식으로 나열하세요. 각 항목에 구체적인 세특 내용이나 활동 근거를 인용하세요.
+     3. 그 아래에 구체적인 사례들을 리스트(-) 형식으로 나열하세요. 각 항목은 원문을 직접 인용하지 말고 학생 실명, 학교명, 연락처, 주소, 출력자 등 식별정보가 없는 비식별 요약 근거로 작성하세요.
      4. 리스트가 끝나면 한 줄을 띄우고 '**개선 및 보완점(Improvement)**'을 굵게 표시하고 한 줄을 띄우세요.
      5. 그 아래에 보완점들을 리스트(-) 형식으로 나열하세요.
    - 학업역량 분석 시: 교과 등급 추이(학년별 변화 포함), 전공 연계 교과 이수 위계(일반→진로선택 여부), 세특에서 드러난 지적 탐구력을 종합 분석하세요.
@@ -66,13 +66,13 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
       {
         "competency": "academic",
         "issue": "가장 먼저 보완해야 할 약점",
-        "evidence": "생기부 원문에서 확인되는 근거",
+        "evidence": "원문 직접 인용 없이 비식별로 요약한 근거",
         "recommendation": "상담 현장에서 바로 제시할 처방"
       },
       {
         "competency": "career",
         "issue": "두 번째 보완점",
-        "evidence": "생기부 원문 근거",
+        "evidence": "원문 직접 인용 없이 비식별로 요약한 근거",
         "recommendation": "대학/학과/과목/세특으로 이어지는 처방"
       }
     ],
@@ -125,7 +125,7 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
   },
   "structuredData": {
     "changche": {
-      "individual": { "y1": "원본텍스트전체", "y2": "원본텍스트전체", "y3": "원본텍스트전체" },
+      "individual": { "y1": "원문 복사 금지. 식별정보를 제외한 비식별 요약", "y2": "원문 복사 금지. 식별정보를 제외한 비식별 요약", "y3": "원문 복사 금지. 식별정보를 제외한 비식별 요약" },
       "club":       { "y1": "", "y2": "", "y3": "" },
       "career_act": { "y1": "", "y2": "", "y3": "" }
     },
@@ -140,8 +140,8 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
     },
     "behavior": { "y1": "", "y2": "", "y3": "" }
   },
-  "studentName": "학생 이름 (없으면 '학생')",
-  "school": "학교명",
+  "studentName": "직접 식별정보 출력 금지. 항상 '학생'으로 작성",
+  "school": "학교명 출력 금지. 빈 문자열",
   "grade": "학년",
   "targetDept": "희망 학과"
 }
@@ -150,7 +150,7 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
 ※ 분석 지시사항:
 - grades: 교과학습발달상황에서 교과별 학기별 단위수 가중 평균 등급을 소수점 첫째 자리까지 계산. 진로선택 과목(등급 미부여)은 별도 언급. 성적 없는 항목은 null.
 - groupAverages: all(전과목), kems(국영수사과), kemSo(국영수사), kemSc(국영수과) 전체 평균을 소수점 둘째 자리까지.
-- structuredData: 창체/교과/행특 원본 텍스트를 학년별로 누락 없이 전체 추출.
+- structuredData: 창체/교과/행특 원문을 그대로 복사하지 말고 학년별 비식별 요약만 작성. 학생 실명, 학교명, 연락처, 주소, 출력자, 정확한 출력시각, 기타 직접 식별정보는 절대 포함하지 않는다.
 - highlights: structuredData 내용에서 학업/진로/공동체 역량별 핵심 문구 요약 (단순 나열 금지, 역량 증거 중심으로).
 - 역량 점수 기준 (엄격히 적용):
   * 55점 이하: 해당 역량이 생기부에서 거의 드러나지 않음
@@ -169,7 +169,7 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
   - 학업역량: 학업 성취도, 학업 태도, 탐구력
   - 진로역량: 전공 관련 교과 이수노력, 전공 관련 교과 성취도, 진로 탐색 활동과 경험
   - 공동체역량: 협업과 소통, 나눔과 배려, 성실성과 규칙준수, 리더십
-- admissionsReadiness.criticalWeaknesses에는 단순한 감상이 아니라 "원문 근거 -> 약점 -> 처방"의 순서가 드러나야 합니다.
+- admissionsReadiness.criticalWeaknesses에는 단순한 감상이 아니라 "비식별 요약 근거 -> 약점 -> 처방"의 순서가 드러나야 합니다.
 - admissionsReadiness.nextActions는 UNITHING의 다음 서비스 흐름에 맞춰 작성하세요.
   - university: 대학 찾기/목표 대학 선택
   - subject: 목표 대학·학과 기준 과목 설계
@@ -180,6 +180,8 @@ const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를
 const GENERATION_CONFIG = {
   thinkingConfig: { thinkingBudget: 0 },
 } as GenerationConfig;
+
+const MAX_SEGIBU_PDF_BYTES = 20 * 1024 * 1024;
 
 const DEFAULT_READINESS: AdmissionsReadiness = {
   overall: '분석 결과를 바탕으로 대학 찾기, 과목 설계, 세특 보완을 순차적으로 진행해야 합니다.',
@@ -366,15 +368,13 @@ function getErrorDetail(error: unknown): string {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const teacherId = (session?.user as { teacherId?: string } | undefined)?.teacherId;
-    const quota = checkAiQuota('segibu', teacherId);
-    if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
-      systemInstruction: SYSTEM_INSTRUCTION,
-    });
+    if (!session?.user) return Response.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    const teacherId = (session.user as { teacherId?: string }).teacherId;
+    if (!teacherId) {
+      return Response.json({
+        error: '교사 프로필을 확인하지 못했습니다. 다시 로그인하거나 서버 환경변수 SUPABASE_SERVICE_ROLE_KEY를 확인해 주세요.',
+      }, { status: 401 });
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let parts: any[];
@@ -383,11 +383,16 @@ export async function POST(req: Request) {
     if (contentType.includes('application/json')) {
       const body = await req.json();
       if (!body.text) return Response.json({ error: '텍스트가 없습니다' }, { status: 400 });
+      if (body.privacyConfirmed !== true) return Response.json({ error: '개인정보 제거 확인이 필요합니다.' }, { status: 400 });
       parts = [{ text: `[생기부 원문]\n${body.text}\n\n위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.` }];
     } else {
       const formData = await req.formData();
+      if (formData.get('privacyConfirmed') !== 'true') return Response.json({ error: '비식별화 확인이 필요합니다.' }, { status: 400 });
       const file = formData.get('file') as File | null;
       if (!file) return Response.json({ error: '파일이 없습니다' }, { status: 400 });
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) return Response.json({ error: 'PDF 파일만 분석할 수 있습니다.' }, { status: 400 });
+      if (file.size > MAX_SEGIBU_PDF_BYTES) return Response.json({ error: 'PDF는 20MB 이하만 분석할 수 있습니다.' }, { status: 400 });
       const bytes = await file.arrayBuffer();
       const base64 = Buffer.from(bytes).toString('base64');
       parts = [
@@ -395,6 +400,15 @@ export async function POST(req: Request) {
         { text: '위 생기부를 분석하여 지시한 형식대로 마크다운 리포트와 JSON 데이터를 출력하세요.' },
       ];
     }
+
+    const quota = checkAiQuota('segibu', teacherId);
+    if (!quota.ok) return Response.json({ error: quota.error, limit: quota.limit, remaining: quota.remaining }, { status: quota.status });
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      systemInstruction: SYSTEM_INSTRUCTION,
+    });
 
     const analysis = await generateAnalysis(model, [{ role: 'user', parts }]);
     return Response.json(analysis);

@@ -5,7 +5,6 @@ import { SegibuAnalysis, GradeMatrix, CategoryGrades } from '@/types/analysis';
 import { StudentReportView } from '@/components/services/StudentReportView';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -13,6 +12,7 @@ import {
 } from 'recharts';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { PDFDocument } from 'pdf-lib';
 
 // ── 토큰 ──────────────────────────────────────────────────────────────────────
 const T = {
@@ -271,6 +271,422 @@ const CRITERIA_CONTENT = `**평가 기준 (입학사정관 관점)**
 **창의성 및 문제 해결**
 스스로 문제를 발견하고 창의적으로 해결한 경험이 있는가?`;
 
+type RedactionZone = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type TextBox = RedactionZone & {
+  pageIndex: number;
+  text: string;
+  normalizedText: string;
+};
+
+type TextLine = {
+  pageIndex: number;
+  normalizedText: string;
+  boxes: Array<TextBox & { start: number; end: number }>;
+};
+
+type RedactionCandidate = {
+  text: string;
+  normalizedText: string;
+  source: 'institution' | 'fixed-zone-name' | 'manual';
+};
+
+type RedactionBuildSummary = {
+  pages: number;
+  textLayerFound: boolean;
+  autoCandidateCount: number;
+  manualCandidateCount: number;
+  dynamicZoneCount: number;
+};
+
+type RedactedSegibuResult = {
+  file: File;
+  summary: RedactionBuildSummary;
+};
+
+type PdfTextItemLike = {
+  str?: unknown;
+  transform?: unknown;
+  width?: unknown;
+  height?: unknown;
+};
+
+type PdfTextContentLike = {
+  items?: unknown;
+};
+
+type PdfViewportLike = {
+  width: number;
+  height: number;
+};
+
+type PdfPageProxyLike = {
+  getViewport: (args: { scale: number }) => PdfViewportLike;
+  getTextContent: () => Promise<PdfTextContentLike>;
+  render: (params: {
+    canvas: HTMLCanvasElement;
+    canvasContext: CanvasRenderingContext2D;
+    viewport: unknown;
+  }) => { promise: Promise<unknown> };
+};
+
+type PdfDocumentProxyLike = {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<PdfPageProxyLike>;
+};
+
+const PDFJS_WORKER_SRC = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
+const REDACTION_RENDER_SCALE = 1.8;
+const REDACTION_PADDING = 0.004;
+const DYNAMIC_REDACTION_PADDING = 0.006;
+const IDENTIFIER_STOPWORDS = new Set([
+  '학년', '학기', '학과', '구분', '번호', '성명', '담임성명', '졸업대장번호', '수상명', '등급', '수상연월일',
+  '참가대상', '수강자', '특기사항', '결과', '출결상황', '자격증', '인증', '취득상황', '해당사항없음',
+  '학교생활', '학교생활기록부', '고등학교', '중학교', '초등학교',
+]);
+const INSTITUTION_PATTERN = /(?:\([^)]+\))?[가-힣A-Za-z0-9·.\-]{2,40}(?:초등학교|중학교|고등학교|여자고등학교|남자고등학교|고교|여고|남고)/g;
+
+function getFixedSegibuRedactionZones(pageIndex: number): RedactionZone[] {
+  const zones: RedactionZone[] = [
+    // 모든 페이지 하단 출력 학교명/출력일/반/번호/성명 영역.
+    { x: 0, y: 0, width: 1, height: 0.08 },
+  ];
+
+  if (pageIndex === 0) {
+    zones.push(
+      // 1페이지 제목 아래 졸업대장번호/학적사항/담임/사진 블록 전체.
+      { x: 0.04, y: 0.515, width: 0.92, height: 0.345 },
+      // 1페이지 수상경력 표의 수여기관 컬럼만.
+      { x: 0.63, y: 0.19, width: 0.19, height: 0.20 },
+    );
+  }
+
+  if (pageIndex === 3) {
+    zones.push(
+      // 4페이지 봉사활동실적의 장소 또는 주관기관명 컬럼.
+      { x: 0.37, y: 0.075, width: 0.19, height: 0.19 },
+    );
+  }
+
+  if (pageIndex === 4) {
+    zones.push(
+      // 5페이지 봉사활동실적의 장소 또는 주관기관명 컬럼.
+      { x: 0.37, y: 0.575, width: 0.19, height: 0.30 },
+    );
+  }
+
+  return zones;
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function expandZone(zone: RedactionZone, padding = REDACTION_PADDING): RedactionZone {
+  const x = clamp01(zone.x - padding);
+  const y = clamp01(zone.y - padding);
+  const right = clamp01(zone.x + zone.width + padding);
+  const top = clamp01(zone.y + zone.height + padding);
+  return { x, y, width: Math.max(0, right - x), height: Math.max(0, top - y) };
+}
+
+function zoneContainsPoint(zone: RedactionZone, x: number, y: number) {
+  return x >= zone.x && x <= zone.x + zone.width && y >= zone.y && y <= zone.y + zone.height;
+}
+
+function isInFixedZone(box: TextBox) {
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  return getFixedSegibuRedactionZones(box.pageIndex).some((zone) => zoneContainsPoint(expandZone(zone, 0.012), cx, cy));
+}
+
+function normalizeIdentifier(value: string) {
+  return value.replace(/[\s,.:;|/\\]+/g, '').trim();
+}
+
+function normalizeManualTerms(value: string) {
+  return value
+    .split(/[\n,]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function cleanCandidate(value: string) {
+  return value.trim().replace(/[()[\]{}<>「」『』,.:;]+$/g, '');
+}
+
+function isLikelyInstitution(value: string) {
+  const normalized = normalizeIdentifier(value);
+  if (normalized.length < 5) return false;
+  if (IDENTIFIER_STOPWORDS.has(normalized)) return false;
+  if (/(?:교육과정|생활기록|학교생활|학생부|학교폭력|학교주변|고등학교생활)/.test(normalized)) return false;
+  return /(초등학교|중학교|고등학교|고교|여고|남고)$/.test(normalized);
+}
+
+function isLikelyNameFromFixedZone(value: string) {
+  const normalized = normalizeIdentifier(value);
+  if (!/^[가-힣]{2,4}$/.test(normalized)) return false;
+  return !IDENTIFIER_STOPWORDS.has(normalized);
+}
+
+function addCandidate(map: Map<string, RedactionCandidate>, text: string, source: RedactionCandidate['source']) {
+  const cleaned = cleanCandidate(text);
+  const normalizedText = normalizeIdentifier(cleaned);
+  if (!normalizedText || normalizedText.length < 2) return;
+  if (IDENTIFIER_STOPWORDS.has(normalizedText)) return;
+  map.set(normalizedText, { text: cleaned, normalizedText, source });
+}
+
+function textItemToBox(item: PdfTextItemLike, pageIndex: number, pageWidth: number, pageHeight: number): TextBox | null {
+  const text = typeof item.str === 'string' ? item.str.trim() : '';
+  const transform = Array.isArray(item.transform) ? item.transform : [];
+  if (!text || transform.length < 6) return null;
+  const xValue = Number(transform[4]);
+  const yValue = Number(transform[5]);
+  const fontHeight = Number(item.height) || Math.abs(Number(transform[3])) || 9;
+  const widthValue = Number(item.width) || Math.max(fontHeight * 0.55 * text.length, fontHeight);
+  if (!Number.isFinite(xValue) || !Number.isFinite(yValue) || !Number.isFinite(widthValue)) return null;
+
+  return {
+    pageIndex,
+    text,
+    normalizedText: normalizeIdentifier(text),
+    x: clamp01(xValue / pageWidth),
+    y: clamp01((yValue - fontHeight * 0.25) / pageHeight),
+    width: clamp01(widthValue / pageWidth),
+    height: clamp01((fontHeight * 1.25) / pageHeight),
+  };
+}
+
+async function extractPageTextBoxes(page: PdfPageProxyLike, pageIndex: number, viewport: PdfViewportLike): Promise<TextBox[]> {
+  const textContent = await page.getTextContent();
+  const items = Array.isArray(textContent.items) ? textContent.items : [];
+  return items
+    .map((item) => textItemToBox(item as PdfTextItemLike, pageIndex, viewport.width, viewport.height))
+    .filter((box): box is TextBox => Boolean(box && box.normalizedText));
+}
+
+function buildTextLines(boxes: TextBox[]): TextLine[] {
+  const sorted = [...boxes].sort((a, b) => a.pageIndex - b.pageIndex || b.y - a.y || a.x - b.x);
+  const lines: TextBox[][] = [];
+
+  for (const box of sorted) {
+    const centerY = box.y + box.height / 2;
+    const line = lines.find((items) => {
+      const first = items[0];
+      if (!first || first.pageIndex !== box.pageIndex) return false;
+      const firstCenterY = first.y + first.height / 2;
+      return Math.abs(firstCenterY - centerY) < 0.006;
+    });
+    if (line) line.push(box);
+    else lines.push([box]);
+  }
+
+  return lines.map((items) => {
+    const boxesInLine = [...items].sort((a, b) => a.x - b.x);
+    let cursor = 0;
+    const boxesWithIndexes = boxesInLine.map((box) => {
+      const start = cursor;
+      cursor += box.normalizedText.length;
+      return { ...box, start, end: cursor };
+    });
+    return {
+      pageIndex: boxesWithIndexes[0]?.pageIndex ?? 0,
+      normalizedText: boxesWithIndexes.map((box) => box.normalizedText).join(''),
+      boxes: boxesWithIndexes,
+    };
+  });
+}
+
+function collectRedactionCandidates(boxes: TextBox[], manualTerms: string[]) {
+  const map = new Map<string, RedactionCandidate>();
+
+  for (const box of boxes) {
+    for (const match of box.text.matchAll(INSTITUTION_PATTERN)) {
+      const value = match[0];
+      if (isLikelyInstitution(value)) addCandidate(map, value, 'institution');
+      const withoutPrefix = value.replace(/^\([^)]+\)/, '');
+      if (withoutPrefix !== value && isLikelyInstitution(withoutPrefix)) addCandidate(map, withoutPrefix, 'institution');
+    }
+    if (isInFixedZone(box) && isLikelyNameFromFixedZone(box.text)) {
+      addCandidate(map, box.text, 'fixed-zone-name');
+    }
+  }
+
+  for (const term of manualTerms) {
+    addCandidate(map, term, 'manual');
+  }
+
+  return [...map.values()];
+}
+
+function zonesForCandidateInLine(line: TextLine, candidate: RedactionCandidate): RedactionZone[] {
+  const zones: RedactionZone[] = [];
+  const candidateLength = candidate.normalizedText.length;
+  if (candidateLength === 0) return zones;
+
+  let searchFrom = 0;
+  while (searchFrom < line.normalizedText.length) {
+    const index = line.normalizedText.indexOf(candidate.normalizedText, searchFrom);
+    if (index < 0) break;
+    const endIndex = index + candidateLength;
+    for (const box of line.boxes) {
+      const overlapStart = Math.max(index, box.start);
+      const overlapEnd = Math.min(endIndex, box.end);
+      if (overlapEnd <= overlapStart) continue;
+      const boxLength = Math.max(1, box.end - box.start);
+      const startRatio = (overlapStart - box.start) / boxLength;
+      const endRatio = (overlapEnd - box.start) / boxLength;
+      zones.push(expandZone({
+        x: box.x + box.width * startRatio,
+        y: box.y,
+        width: box.width * Math.max(0, endRatio - startRatio),
+        height: box.height,
+      }, DYNAMIC_REDACTION_PADDING));
+    }
+    searchFrom = endIndex;
+  }
+
+  return zones;
+}
+
+function collectDynamicRedactionZones(boxes: TextBox[], manualTerms: string[]) {
+  const candidates = collectRedactionCandidates(boxes, manualTerms);
+  const lines = buildTextLines(boxes);
+  const zonesByPage = new Map<number, RedactionZone[]>();
+
+  for (const line of lines) {
+    for (const candidate of candidates) {
+      if (!line.normalizedText.includes(candidate.normalizedText)) continue;
+      const zones = zonesForCandidateInLine(line, candidate);
+      const current = zonesByPage.get(line.pageIndex) ?? [];
+      current.push(...zones);
+      zonesByPage.set(line.pageIndex, current);
+    }
+  }
+
+  return {
+    candidates,
+    zonesByPage,
+    dynamicZoneCount: [...zonesByPage.values()].reduce((sum, zones) => sum + zones.length, 0),
+  };
+}
+
+function drawPrivacyMask(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
+  ctx.fillStyle = '#D7DEE8';
+  ctx.fillRect(x, y, width, height);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, width, height);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(104, 117, 137, 0.42)';
+  ctx.lineWidth = Math.max(1, Math.min(width, height) * 0.045);
+  const gap = Math.max(8, Math.min(width, height) * 0.18);
+  for (let offset = -height; offset < width + height; offset += gap) {
+    ctx.beginPath();
+    ctx.moveTo(x + offset, y + height);
+    ctx.lineTo(x + offset + height, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(97, 111, 132, 0.55)';
+  ctx.lineWidth = Math.max(1, Math.min(width, height) * 0.018);
+  ctx.strokeRect(x, y, width, height);
+}
+
+function drawRedactionZones(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, zones: RedactionZone[]) {
+  ctx.save();
+  for (const zone of zones) {
+    drawPrivacyMask(
+      ctx,
+      zone.x * canvas.width,
+      (1 - zone.y - zone.height) * canvas.height,
+      zone.width * canvas.width,
+      zone.height * canvas.height,
+    );
+  }
+  ctx.restore();
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('PDF 페이지 이미지를 만들지 못했습니다.'));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
+async function createRedactedSegibuFile(file: File, additionalTerms: string): Promise<RedactedSegibuResult> {
+  const source = new Uint8Array(await file.arrayBuffer());
+  const pdfjs = await import('pdfjs-dist');
+  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+
+  const sourcePdf = await (pdfjs.getDocument({ data: source.slice() }) as unknown as { promise: Promise<PdfDocumentProxyLike> }).promise;
+  const outputPdf = await PDFDocument.create();
+  const pages: Array<{ page: PdfPageProxyLike; pdfViewport: PdfViewportLike; boxes: TextBox[] }> = [];
+
+  for (let pageIndex = 0; pageIndex < sourcePdf.numPages; pageIndex += 1) {
+    const page = await sourcePdf.getPage(pageIndex + 1);
+    const pdfViewport = page.getViewport({ scale: 1 });
+    const boxes = await extractPageTextBoxes(page, pageIndex, pdfViewport);
+    pages.push({ page, pdfViewport, boxes });
+  }
+
+  const manualTerms = normalizeManualTerms(additionalTerms);
+  const allBoxes = pages.flatMap((pageData) => pageData.boxes);
+  const dynamic = collectDynamicRedactionZones(allBoxes, manualTerms);
+
+  for (let pageIndex = 0; pageIndex < sourcePdf.numPages; pageIndex += 1) {
+    const { page: sourcePage, pdfViewport } = pages[pageIndex];
+    const renderViewport = sourcePage.getViewport({ scale: REDACTION_RENDER_SCALE });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(renderViewport.width);
+    canvas.height = Math.ceil(renderViewport.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('PDF 페이지를 렌더링할 수 없습니다.');
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await sourcePage.render({ canvas, canvasContext: ctx, viewport: renderViewport }).promise;
+    drawRedactionZones(ctx, canvas, [
+      ...getFixedSegibuRedactionZones(pageIndex).map((zone) => expandZone(zone, REDACTION_PADDING)),
+      ...(dynamic.zonesByPage.get(pageIndex) ?? []),
+    ]);
+
+    const imageBlob = await canvasToBlob(canvas);
+    const imageBytes = await imageBlob.arrayBuffer();
+    const image = await outputPdf.embedJpg(imageBytes);
+    const outputPage = outputPdf.addPage([pdfViewport.width, pdfViewport.height]);
+    outputPage.drawImage(image, { x: 0, y: 0, width: pdfViewport.width, height: pdfViewport.height });
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  const redactedBytes = await outputPdf.save();
+  const redactedArrayBuffer = redactedBytes.buffer.slice(
+    redactedBytes.byteOffset,
+    redactedBytes.byteOffset + redactedBytes.byteLength,
+  ) as ArrayBuffer;
+  const blob = new Blob([redactedArrayBuffer], { type: 'application/pdf' });
+  const safeName = file.name.replace(/\.pdf$/i, '') || 'segibu';
+  return {
+    file: new File([blob], `${safeName}_비식별확인.pdf`, { type: 'application/pdf' }),
+    summary: {
+      pages: sourcePdf.numPages,
+      textLayerFound: allBoxes.length > 0,
+      autoCandidateCount: dynamic.candidates.filter((candidate) => candidate.source !== 'manual').length,
+      manualCandidateCount: manualTerms.length,
+      dynamicZoneCount: dynamic.dynamicZoneCount,
+    },
+  };
+}
+
 // ── 활동 상세 탭 ──────────────────────────────────────────────────────────────
 const ACTIVITY_TABS = [
   { key: 'individual', label: '자율활동' },
@@ -302,6 +718,24 @@ function HighlightCard({ highlight }: { highlight: { academic: string; career: s
           <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{highlight[key]}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function PrivacyLockedRecord({ label = '원본 기록' }: { label?: string }) {
+  return (
+    <div style={{ position: 'relative', padding: 14, background: T.bgAlt, borderRadius: 10, minHeight: 132, overflow: 'hidden', border: `1px solid ${T.border}` }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 8 }}>{label}</div>
+      <div aria-hidden="true" style={{ filter: 'blur(5px)', opacity: 0.35, userSelect: 'none', pointerEvents: 'none' }}>
+        {[1, 2, 3, 4].map((line) => (
+          <div key={line} style={{ height: 12, width: `${92 - line * 9}%`, borderRadius: 999, background: line % 2 ? '#CBD5E1' : '#DDE3EA', marginBottom: 10 }} />
+        ))}
+      </div>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, textAlign: 'center', background: 'rgba(248,250,252,0.72)' }}>
+        <div style={{ width: 34, height: 34, borderRadius: 999, background: T.surface, border: `1px solid ${T.borderStrong}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, fontSize: 11, fontWeight: 900 }}>LOCK</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>개인정보 보호 잠금</div>
+        <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.5 }}>생기부 원문과 원문 인용은 저장·출력하지 않습니다. 상담에는 오른쪽 역량 하이라이트와 처방 요약을 사용하세요.</div>
+      </div>
     </div>
   );
 }
@@ -542,11 +976,50 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
 }) {
   const [mode, setMode] = useState<'pdf' | 'text'>('pdf');
   const [file, setFile] = useState<File | null>(null);
+  const [redactedFile, setRedactedFile] = useState<File | null>(null);
+  const [redactedUrl, setRedactedUrl] = useState<string | null>(null);
+  const [extraRedactionTerms, setExtraRedactionTerms] = useState('');
+  const [redactionSummary, setRedactionSummary] = useState<RedactionBuildSummary | null>(null);
+  const [redactionLoading, setRedactionLoading] = useState(false);
+  const [redactionError, setRedactionError] = useState<string | null>(null);
+  const [privacyConfirmed, setPrivacyConfirmed] = useState(false);
   const [text, setText] = useState('');
   const [drag, setDrag] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
-  const canSubmit = mode === 'pdf' ? !!file : text.trim().length > 100;
+  const canSubmit = mode === 'pdf'
+    ? Boolean(redactedFile && privacyConfirmed && !redactionLoading)
+    : text.trim().length > 100 && privacyConfirmed;
+
+  const clearRedactedPreview = useCallback(() => {
+    if (redactedUrl) URL.revokeObjectURL(redactedUrl);
+    setRedactedUrl(null);
+    setRedactedFile(null);
+    setRedactionSummary(null);
+  }, [redactedUrl]);
+
+  const handlePdfFile = useCallback(async (nextFile: File | null) => {
+    setFile(nextFile);
+    setPrivacyConfirmed(false);
+    setRedactionError(null);
+    clearRedactedPreview();
+    if (!nextFile) return;
+    setRedactionLoading(true);
+    try {
+      const redacted = await createRedactedSegibuFile(nextFile, extraRedactionTerms);
+      setRedactedFile(redacted.file);
+      setRedactionSummary(redacted.summary);
+      setRedactedUrl(URL.createObjectURL(redacted.file));
+    } catch {
+      setRedactionError('PDF 비식별화 미리보기를 만들지 못했습니다. 파일이 암호화되어 있거나 표준 PDF가 아닐 수 있습니다.');
+    } finally {
+      setRedactionLoading(false);
+    }
+  }, [clearRedactedPreview, extraRedactionTerms]);
+
+  useEffect(() => () => {
+    if (redactedUrl) URL.revokeObjectURL(redactedUrl);
+  }, [redactedUrl]);
 
   return (
     <div style={{ fontFamily: FONT, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 580, margin: '40px auto' }}>
@@ -560,7 +1033,10 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
         {([{ key: 'pdf', label: 'PDF 업로드' }, { key: 'text', label: '텍스트 붙여넣기' }] as const).map(m => (
           <button
             key={m.key}
-            onClick={() => setMode(m.key)}
+            onClick={() => {
+              setMode(m.key);
+              setPrivacyConfirmed(false);
+            }}
             style={{
               flex: 1, padding: '9px 0', borderRadius: 7, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: 'none', fontFamily: FONT,
               background: mode === m.key ? T.surface : 'transparent',
@@ -578,7 +1054,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
             onClick={() => ref.current?.click()}
             onDragOver={e => { e.preventDefault(); setDrag(true); }}
             onDragLeave={() => setDrag(false)}
-            onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f?.type === 'application/pdf') setFile(f); }}
+            onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f?.type === 'application/pdf') void handlePdfFile(f); }}
             style={{ border: `2px dashed ${drag ? T.primary : T.borderStrong}`, borderRadius: 12, padding: '36px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', background: drag ? T.primarySoft : T.bgAlt, transition: 'all 0.15s' }}
           >
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -590,7 +1066,64 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
             <div style={{ fontSize: 15, fontWeight: 600, color: T.textMuted }}>{file ? file.name : '생기부 PDF를 끌어다 놓거나 클릭해 선택'}</div>
             <div style={{ fontSize: 13, color: T.textSubtle }}>최대 20MB · PDF만 가능</div>
           </div>
-          <input ref={ref} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+          <input ref={ref} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) void handlePdfFile(f); }} />
+          {file && (
+            <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 6 }}>
+                추가로 전체 페이지에서 가릴 식별어
+              </label>
+              <textarea
+                value={extraRedactionTerms}
+                onChange={e => setExtraRedactionTerms(e.target.value)}
+                placeholder="학생 이름, 담임/교사명, 학교 약칭, 기관명 등을 한 줄에 하나씩 입력"
+                style={{ width: '100%', minHeight: 58, resize: 'vertical', boxSizing: 'border-box', borderRadius: 8, border: `1px solid ${T.borderStrong}`, padding: '9px 10px', fontSize: 13, color: T.text, lineHeight: 1.5, fontFamily: FONT, outline: 'none', background: '#fff' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                <div style={{ fontSize: 12, color: T.textSubtle, lineHeight: 1.45 }}>
+                  자동 탐지는 학교·기관명과 고정 개인정보 영역에서 나온 이름 후보만 가립니다. 과목명·활동내용은 자동 대상에서 제외합니다.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handlePdfFile(file)}
+                  disabled={redactionLoading}
+                  style={{ flexShrink: 0, height: 32, padding: '0 11px', borderRadius: 8, border: `1px solid ${T.primaryBorder}`, background: redactionLoading ? T.bgAlt : T.primarySoft, color: redactionLoading ? T.textSubtle : T.primary, fontSize: 12.5, fontWeight: 800, cursor: redactionLoading ? 'default' : 'pointer', fontFamily: FONT }}
+                >
+                  미리보기 다시 만들기
+                </button>
+              </div>
+            </div>
+          )}
+          {(redactionLoading || redactionError || redactedUrl) && (
+            <div style={{ marginTop: 14, border: `1px solid ${redactionError ? '#FCA5A5' : T.border}`, borderRadius: 12, overflow: 'hidden', background: T.surfaceAlt }}>
+              <div style={{ padding: '11px 14px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>비식별화 미리보기</div>
+                  <div style={{ fontSize: 12, color: T.textSubtle, marginTop: 2 }}>1페이지 개인정보·사진, 전체 하단 출력정보를 고정 마스킹하고 학교·기관명·이름 후보는 텍스트 좌표로 2차 마스킹합니다. 최종 파일은 원본 레이어가 없는 이미지 PDF입니다.</div>
+                </div>
+                {redactionLoading && <div style={{ fontSize: 12, fontWeight: 800, color: T.primary }}>처리 중...</div>}
+              </div>
+              {redactionError ? (
+                <div style={{ padding: 14, fontSize: 13, color: T.danger, lineHeight: 1.6 }}>{redactionError}</div>
+              ) : redactedUrl ? (
+                <>
+                  <iframe title="비식별화 PDF 미리보기" src={redactedUrl} style={{ width: '100%', height: 260, border: 'none', background: '#fff' }} />
+                  {redactionSummary && (
+                    <div style={{ padding: '9px 14px', borderTop: `1px solid ${T.border}`, fontSize: 12, color: T.textMuted, lineHeight: 1.5, background: '#fff' }}>
+                      {redactionSummary.textLayerFound
+                        ? `${redactionSummary.pages}쪽 확인 · 자동 식별어 ${redactionSummary.autoCandidateCount}개 · 추가 식별어 ${redactionSummary.manualCandidateCount}개 · 2차 마스킹 영역 ${redactionSummary.dynamicZoneCount}개`
+                        : `${redactionSummary.pages}쪽 확인 · 텍스트 레이어를 찾지 못했습니다. 전체 미리보기와 추가 식별어를 더 꼼꼼히 확인하세요.`}
+                    </div>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '12px 14px', borderTop: `1px solid ${T.border}`, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={privacyConfirmed} onChange={e => setPrivacyConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
+                    <span style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.55 }}>
+                      전체 페이지 미리보기를 확인했으며, 남아 있는 민감정보가 있으면 원본 PDF를 수정한 뒤 다시 업로드하겠습니다.
+                    </span>
+                  </label>
+                </>
+              ) : null}
+            </div>
+          )}
         </>
       ) : (
         <div>
@@ -610,13 +1143,19 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
           <div style={{ fontSize: 12, color: text.trim().length < 100 ? T.warning : T.success, marginTop: 5, fontWeight: 600 }}>
             {text.trim().length}자 {text.trim().length < 100 ? '(최소 100자 이상 입력)' : '입력됨'}
           </div>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '11px 12px', borderRadius: 10, background: T.warningSoft, border: '1px solid #FCD34D', marginTop: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={privacyConfirmed} onChange={e => setPrivacyConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
+            <span style={{ fontSize: 13, color: '#92400E', lineHeight: 1.55 }}>
+              붙여넣은 텍스트에서 학생 실명, 주민번호, 연락처, 주소, 출력자 등 직접 식별정보를 제거했습니다.
+            </span>
+          </label>
         </div>
       )}
 
       {error && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: T.dangerSoft, color: T.danger, fontSize: 14 }}>{error}</div>}
       <button
         onClick={() => {
-          if (mode === 'pdf' && file) onAnalyze(file);
+          if (mode === 'pdf' && redactedFile) onAnalyze(redactedFile);
           else if (mode === 'text' && text.trim()) onAnalyze(text.trim());
         }}
         disabled={!canSubmit}
@@ -624,13 +1163,16 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
       >
         AI 심층 분석 시작
       </button>
+      <div style={{ marginTop: 8, fontSize: 12, color: T.textSubtle, lineHeight: 1.5, textAlign: 'center' }}>
+        분석 시작 시 Gemini 호출 1회가 사용됩니다. 실패 시 같은 파일을 바로 반복 제출하지 말고 오류 내용을 먼저 확인하세요.
+      </div>
     </div>
   );
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export function Service3Segibu() {
-  const { segibuAnalysis, analyzeSegibu, analysisLoading, analysisError, currentStudent } = useStudent();
+  const { segibuAnalysis, analyzeSegibu, clearSegibuAnalysis, analysisLoading, analysisError, currentStudent } = useStudent();
   const [tab, setTab] = useState<'summary' | 'report' | 'grades' | 'activities'>('summary');
   const [activityCategory, setActivityCategory] = useState<'individual' | 'club' | 'career_act'>('individual');
   const [curriculumKey, setCurriculumKey] = useState<'korean' | 'math' | 'english' | 'social' | 'science' | 'liberal' | 'arts_phys'>('korean');
@@ -646,11 +1188,9 @@ export function Service3Segibu() {
     analyzeSegibu(input);
   }, [analyzeSegibu]);
 
-  const handleReanalyze = () => {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.pdf';
-    input.onchange = e => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleAnalyze(f); };
-    input.click();
+  const handleNewAnalysis = () => {
+    if (!confirm('현재 저장된 상담 요약 분석을 지우고 새 분석을 시작할까요?')) return;
+    void clearSegibuAnalysis();
   };
 
   const handlePDF = async () => {
@@ -703,7 +1243,7 @@ export function Service3Segibu() {
             {isPrinting ? 'PDF 생성 중...' : 'PDF 저장'}
           </button>
           <button onClick={() => window.print()} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>인쇄</button>
-          <button onClick={handleReanalyze} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, background: T.primary, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: FONT }}>재분석</button>
+          <button onClick={handleNewAnalysis} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, background: T.primary, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: FONT }}>새 분석</button>
         </div>
       </div>
 
@@ -760,11 +1300,8 @@ export function Service3Segibu() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
           {readiness && <ReadinessSummary readiness={readiness} />}
 
-          {/* 마크다운 리포트 */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, gridColumn: '1 / -1' }}>
-            <div className="segibu-report" style={{ fontSize: 15, lineHeight: 1.8, color: T.text, fontFamily: FONT }}>
-              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{r.report}</Markdown>
-            </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <PrivacyLockedRecord label="AI 분석 원문" />
           </div>
           {/* 레이더 + 향후 전략 */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
@@ -833,10 +1370,7 @@ export function Service3Segibu() {
               ))}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ padding: 14, background: T.bgAlt, borderRadius: 10, fontSize: 14, color: T.textMuted, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>원본 기록</div>
-                {r.structuredData.changche[activityCategory][yearTab] || '해당 없음'}
-              </div>
+              <PrivacyLockedRecord />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>역량 하이라이트</div>
                 <HighlightCard highlight={r.highlights.changche[activityCategory][yearTab]} />
@@ -868,10 +1402,7 @@ export function Service3Segibu() {
               ))}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ padding: 14, background: T.bgAlt, borderRadius: 10, fontSize: 14, color: T.textMuted, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>원본 기록</div>
-                {r.structuredData.curriculum[curriculumKey][yearTab] || '해당 없음'}
-              </div>
+              <PrivacyLockedRecord />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>역량 하이라이트</div>
                 <HighlightCard highlight={r.highlights.curriculum[curriculumKey][yearTab]} />
@@ -893,10 +1424,7 @@ export function Service3Segibu() {
               ))}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ padding: 14, background: T.bgAlt, borderRadius: 10, fontSize: 14, color: T.textMuted, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>원본 기록</div>
-                {r.structuredData.behavior[yearTab] || '해당 없음'}
-              </div>
+              <PrivacyLockedRecord />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>역량 하이라이트</div>
                 <HighlightCard highlight={r.highlights.behavior[yearTab]} />

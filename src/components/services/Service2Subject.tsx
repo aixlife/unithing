@@ -13,6 +13,12 @@ import { useStudent } from '@/contexts/StudentContext';
 import { getPrimaryTargetPick, getUniversityPicks } from '@/types/student';
 import type { SubjectRecommendationPlan, UniversitySubjectRecord } from '@/types/subjects';
 
+type ParsedCurriculumPdf = {
+  mandatory: Record<'2-1' | '2-2' | '3-1' | '3-2', string[]>;
+  groups: { grade: number; semester: string; credits: number; selectCount: number; subjects: string[] }[];
+  notes: string[];
+};
+
 const T = {
   primary: '#1B64DA',
   primarySoft: '#EBF2FF',
@@ -146,6 +152,9 @@ export function Service2Subject() {
   const [tempGroups, setTempGroups] = useState<{ id: number; grade: number; semester: string; credits: number; selectCount: number; subjects: string }[]>([
     { id: 1, grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }
   ]);
+  const [curriculumParseLoading, setCurriculumParseLoading] = useState(false);
+  const [curriculumParseMessage, setCurriculumParseMessage] = useState<string | null>(null);
+  const [curriculumParseNotes, setCurriculumParseNotes] = useState<string[]>([]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [univSearchTerm, setUnivSearchTerm] = useState('');
@@ -162,6 +171,7 @@ export function Service2Subject() {
   const [subjectPlanLoading, setSubjectPlanLoading] = useState(false);
   const [subjectPlanError, setSubjectPlanError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const curriculumFileRef = useRef<HTMLInputElement>(null);
 
   const allMajors = useMemo(() => {
     return FIELD_DATA.flatMap(field => field.majors.map(major => ({ ...major, fieldName: field.name })));
@@ -336,6 +346,44 @@ export function Service2Subject() {
     setCustomGroups(groups);
     setIsCustomMode(true);
     setShowCustomForm(false);
+  };
+
+  const handleCurriculumPdf = async (file: File | null) => {
+    if (!file) return;
+    setCurriculumParseLoading(true);
+    setCurriculumParseMessage(null);
+    setCurriculumParseNotes([]);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/parse/curriculum-pdf', { method: 'POST', body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? '교육과정 편제표 추출 실패');
+      }
+      const data = await res.json() as ParsedCurriculumPdf;
+      setTempMandatory({
+        '2-1': (data.mandatory['2-1'] ?? []).join(', '),
+        '2-2': (data.mandatory['2-2'] ?? []).join(', '),
+        '3-1': (data.mandatory['3-1'] ?? []).join(', '),
+        '3-2': (data.mandatory['3-2'] ?? []).join(', '),
+      });
+      setTempGroups(data.groups.length > 0 ? data.groups.map((group, index) => ({
+        id: Date.now() + index,
+        grade: group.grade === 3 ? 3 : 2,
+        semester: group.semester || '1·2학기',
+        credits: group.credits || 4,
+        selectCount: group.selectCount || 1,
+        subjects: group.subjects.join(', '),
+      })) : [{ id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }]);
+      setCurriculumParseNotes(data.notes ?? []);
+      setCurriculumParseMessage('PDF 추출값을 입력칸에 채웠습니다. 과목명·학점·택N을 확인한 뒤 적용하세요.');
+    } catch (error) {
+      setCurriculumParseMessage(error instanceof Error ? error.message : '교육과정 편제표 추출 실패');
+    } finally {
+      setCurriculumParseLoading(false);
+      if (curriculumFileRef.current) curriculumFileRef.current.value = '';
+    }
   };
 
   const fetchSubjectMatches = async () => {
@@ -1408,6 +1456,39 @@ export function Service2Subject() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ border: `1px solid ${T.primaryBorder}`, background: T.primarySoft, borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.primary, marginBottom: 6 }}>교육과정 편제표 PDF 불러오기</div>
+                <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55, marginBottom: 10 }}>
+                  제공된 대표 양식 1종을 기준으로 과목명, 학점, 학년, 학기, 택N을 추출합니다. Gemini 호출 1회가 사용되며, 추출 후 아래 입력칸에서 반드시 검수하세요.
+                </div>
+                <input
+                  ref={curriculumFileRef}
+                  type="file"
+                  accept=".pdf"
+                  style={{ display: 'none' }}
+                  onChange={e => void handleCurriculumPdf(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  onClick={() => curriculumFileRef.current?.click()}
+                  disabled={curriculumParseLoading}
+                  style={{ height: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: curriculumParseLoading ? '#9DBBF4' : T.primary, color: '#fff', fontSize: 13, fontWeight: 800, cursor: curriculumParseLoading ? 'default' : 'pointer', fontFamily: FONT }}
+                >
+                  {curriculumParseLoading ? '추출 중...' : 'PDF로 불러오기'}
+                </button>
+                {curriculumParseMessage && (
+                  <div style={{ marginTop: 10, fontSize: 12.5, color: curriculumParseMessage.includes('실패') ? T.danger : T.primary, lineHeight: 1.55, fontWeight: 700 }}>
+                    {curriculumParseMessage}
+                  </div>
+                )}
+                {curriculumParseNotes.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {curriculumParseNotes.map((note, index) => (
+                      <div key={`${index}-${note}`} style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.45 }}>확인 {index + 1}. {note}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Mandatory subjects */}
               <div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 12 }}>필수과목 (학년·학기별)</div>
