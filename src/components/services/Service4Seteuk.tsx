@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { jsPDF } from 'jspdf';
+import { toJpeg } from 'html-to-image';
 import { useStudent } from '@/contexts/StudentContext';
 import {
   getNaesinData,
@@ -124,6 +126,83 @@ function createRecordId() {
 function getTargetLabel(targetPick: UniversityTargetPick | null, fallbackDept: string) {
   const dept = targetPick?.dept || fallbackDept;
   return [targetPick?.name, dept].filter(Boolean).join(' ');
+}
+
+function safeFilename(value: string) {
+  return value.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || '세특_최종결과';
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderPlanContent(item: PlanItem) {
+  if (item.isStepByStep && item.steps) {
+    return item.steps
+      .map((step) => `<div class="step"><strong>${escapeHtml(step.step)} ${escapeHtml(step.title)}</strong><span>${escapeHtml(step.description)}</span></div>`)
+      .join('');
+  }
+  return escapeHtml(item.content ?? '').replace(/\n/g, '<br />');
+}
+
+function buildSeteukPrintHtml({
+  major,
+  topic,
+  draft,
+  plan,
+}: {
+  major: string;
+  topic: string;
+  draft: string;
+  plan: { plan: PlanItem[] } | null;
+}) {
+  const rows = plan?.plan.map((item) => `
+    <tr>
+      <th>${escapeHtml(item.category)}</th>
+      <td>${renderPlanContent(item)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="2" class="empty">계획서 데이터 없음</td></tr>';
+
+  return `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>교과세특 최종 계획서와 세특 초안</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    body { margin: 0; color: #191F28; font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .header { border-bottom: 2px solid #191F28; padding-bottom: 12px; margin-bottom: 18px; }
+    .eyebrow { font-size: 12px; font-weight: 800; color: #4F46E5; margin-bottom: 6px; }
+    h1 { font-size: 22px; margin: 0; }
+    .meta { margin-top: 8px; color: #4E5968; font-size: 13px; }
+    h2 { font-size: 17px; margin: 22px 0 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #D1D6DB; padding: 10px 12px; vertical-align: top; line-height: 1.65; }
+    th { width: 26%; background: #EEF2FF; color: #3730A3; text-align: left; }
+    .draft { border: 1px solid #BBF7D0; background: #F0FDF4; border-radius: 8px; padding: 14px 16px; line-height: 1.85; white-space: pre-wrap; font-size: 14px; }
+    .step { margin-bottom: 9px; }
+    .step strong { display: block; margin-bottom: 3px; }
+    .step span { display: block; color: #4E5968; }
+    .empty { text-align: center; color: #8B95A1; }
+  </style>
+</head>
+<body>
+  <section class="header">
+    <div class="eyebrow">교과세특 최종 결과</div>
+    <h1>교과세특 최종 계획서와 세특 초안</h1>
+    <div class="meta">${[major, topic].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+  </section>
+  <h2>탐구 계획서</h2>
+  <table><tbody>${rows}</tbody></table>
+  <h2>세특 초안</h2>
+  <div class="draft">${escapeHtml(draft || '세특 초안이 없습니다.')}</div>
+</body>
+</html>`;
 }
 
 function collectSubjectHints(records: UniversitySubjectRecord[]) {
@@ -791,15 +870,19 @@ function Phase5({
 
 // ─── Phase 6: 최종 결과 ───────────────────────────────────────────────────────
 function Phase6({
-  draft, plan, loading, error, onRetry,
+  draft, plan, loading, error, onRetry, major, selectedTopic,
 }: {
   draft: string;
   plan: { plan: PlanItem[] } | null;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  major: string;
+  selectedTopic: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   if (loading) return <LoadingCard message="세특 초안과 탐구 계획서를 생성 중이에요... 30초 정도 소요됩니다." />;
 
@@ -821,18 +904,63 @@ function Phase6({
     });
   };
 
+  const handlePdf = async () => {
+    if (!exportRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const image = await toJpeg(exportRef.current, {
+        quality: 0.96,
+        backgroundColor: '#FFFFFF',
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imageProps = pdf.getImageProperties(image);
+      const imageHeight = (imageProps.height * pageWidth) / imageProps.width;
+      let y = 0;
+      while (y < imageHeight) {
+        if (y > 0) pdf.addPage();
+        pdf.addImage(image, 'JPEG', 0, -y, pageWidth, imageHeight);
+        y += pageHeight;
+      }
+      pdf.save(`${safeFilename(`${major || '교과세특'}_최종계획서_세특초안`)}.pdf`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(buildSeteukPrintHtml({ major, topic: selectedTopic, draft, plan }));
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  };
+
   return (
     <SectionCard>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, marginBottom: 24 }}>
         <div>
           <span style={{ padding: '3px 9px', fontSize: 13, borderRadius: 5, background: '#D1FAE5', color: T.success, fontWeight: 700, fontFamily: FONT }}>완성</span>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: '-0.025em', margin: '10px 0 0', fontFamily: FONT }}>최종 결과 확인</h2>
           <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>완성된 세특 초안과 탐구 계획서입니다.</p>
         </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button onClick={handlePrint} style={{ padding: '8px 13px', borderRadius: 8, border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
+            인쇄
+          </button>
+          <button onClick={handlePdf} disabled={exporting} style={{ padding: '8px 13px', borderRadius: 8, border: 'none', background: exporting ? T.bgAlt : T.indigo, color: exporting ? T.textSubtle : '#fff', fontSize: 13, fontWeight: 800, cursor: exporting ? 'not-allowed' : 'pointer', fontFamily: FONT }}>
+            {exporting ? 'PDF 생성 중...' : 'PDF 저장'}
+          </button>
+        </div>
       </div>
 
-      {/* Research Plan */}
-      <div style={{ marginBottom: 32 }}>
+      <div ref={exportRef} style={{ background: T.surface, padding: 2 }}>
+        {/* Research Plan */}
+        <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: `2px solid ${T.indigo}`, paddingBottom: 10, marginBottom: 16 }}>
           <span style={{ fontSize: 18 }}>📋</span>
           <h3 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, fontFamily: FONT }}>탐구 계획서</h3>
@@ -880,10 +1008,10 @@ function Phase6({
         ) : (
           <div style={{ padding: 20, borderRadius: 12, background: T.bgAlt, color: T.textSubtle, fontSize: 15, fontFamily: FONT, textAlign: 'center' }}>계획서 데이터 없음</div>
         )}
-      </div>
+        </div>
 
-      {/* SeTeuk Draft */}
-      <div>
+        {/* SeTeuk Draft */}
+        <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `2px solid ${T.emerald}`, paddingBottom: 10, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>✨</span>
@@ -904,6 +1032,7 @@ function Phase6({
         </div>
         <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 8, textAlign: 'right', fontFamily: FONT }}>
           총 {draft.length}자
+        </div>
         </div>
       </div>
     </SectionCard>
@@ -1343,6 +1472,8 @@ export function Service4Seteuk() {
               draft={draft} plan={plan}
               loading={finalLoading} error={finalError}
               onRetry={fetchFinal}
+              major={effectiveMajor}
+              selectedTopic={selectedTopic}
             />
             {saveMessage && (
               <div style={{

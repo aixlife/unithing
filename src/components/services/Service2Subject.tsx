@@ -672,7 +672,7 @@ export function Service2Subject() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <h2 style={{ fontSize: 'clamp(15px, 2vw, 18px)', fontWeight: 800, color: T.text, margin: 0 }}>
-                {selectedMajor.name} 선택과목 가이드
+                {selectedMajor.name} 선택 과목 가이드
               </h2>
             </div>
 
@@ -708,27 +708,25 @@ export function Service2Subject() {
               </div>
 
               {/* Custom curriculum button */}
-              {(viewMode === 'group' || viewMode === 'plan') && (
-                <button
-                  onClick={() => setShowCustomForm(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '8px 14px',
-                    background: isCustomMode ? T.accent : T.surface,
-                    color: isCustomMode ? '#fff' : T.textMuted,
-                    border: `1px solid ${isCustomMode ? T.accent : T.border}`,
-                    borderRadius: 10,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontFamily: FONT,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <IconSettings />
-                  {isCustomMode ? '내 교육과정' : '교육과정 입력'}
-                </button>
-              )}
+              <button
+                onClick={() => setShowCustomForm(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px',
+                  background: isCustomMode ? T.accent : T.surface,
+                  color: isCustomMode ? '#fff' : T.textMuted,
+                  border: `1px solid ${isCustomMode ? T.accent : T.border}`,
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: FONT,
+                  transition: 'all 0.15s',
+                }}
+              >
+                <IconSettings />
+                {isCustomMode ? '내 교육과정' : '학교 교육과정 업로드'}
+              </button>
 
               {/* PDF button */}
               {viewMode === 'plan' && (
@@ -1452,8 +1450,8 @@ export function Service2Subject() {
             {/* Modal header */}
             <div style={{ background: T.text, padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>우리 학교 교육과정 입력</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>과목명을 쉼표로 구분하여 입력하세요</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>학교 교육과정 업로드/입력</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>편제표 PDF를 불러오거나 과목명을 직접 입력하세요</div>
               </div>
               <button onClick={() => setShowCustomForm(false)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
                 <IconX />
@@ -1462,7 +1460,7 @@ export function Service2Subject() {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div style={{ border: `1px solid ${T.primaryBorder}`, background: T.primarySoft, borderRadius: 12, padding: '14px 16px' }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: T.primary, marginBottom: 6 }}>교육과정 편제표 PDF 불러오기</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.primary, marginBottom: 6 }}>학교 교육과정 편제표 PDF 업로드</div>
                 <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55, marginBottom: 10 }}>
                   제공된 대표 양식 1종을 기준으로 과목명, 학점, 학년, 학기, 택N을 추출합니다. Gemini 호출 1회가 사용되며, 추출 후 아래 입력칸에서 반드시 검수하세요.
                 </div>

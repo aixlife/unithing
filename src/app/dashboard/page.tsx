@@ -9,7 +9,7 @@ import { Service6Roadmap } from '@/components/services/Service6Roadmap';
 const TABS = [
   { id: 3, label: '생기부 분석' },
   { id: 1, label: '대학 찾기' },
-  { id: 2, label: '과목 가이드' },
+  { id: 2, label: '선택 과목 가이드' },
   { id: 4, label: '세특 도우미' },
   { id: 6, label: '상담 로드맵' },
 ] as const;
@@ -50,7 +50,8 @@ export default function DashboardPage() {
               onClick={() => setActiveTab(tab.id)}
               style={{
                 flex: 1,
-                minWidth: 0,
+                minWidth: 106,
+                padding: '0 10px',
                 height: 58,
                 fontSize: 'clamp(14px, 1.3vw, 17px)',
                 fontWeight: isActive ? 800 : 500,
