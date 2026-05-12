@@ -238,7 +238,7 @@ function readinessHtml(readiness: SegibuAnalysis['admissionsReadiness']) {
     </div>
   `).join('');
   const actions = readiness.nextActions.slice(0, 5).map((action) => `
-    <li><strong>${action.priority}. ${escapeHtml(SERVICE_LABELS[action.linkedService])}</strong> ${escapeHtml(action.action)}<br /><span>${escapeHtml(action.reason)}</span></li>
+    <li><span class="action-no">${action.priority}</span><div><strong>${escapeHtml(SERVICE_LABELS[action.linkedService])}</strong> ${escapeHtml(action.action)}<br /><em>${escapeHtml(action.reason)}</em></div></li>
   `).join('');
 
   return `
@@ -310,10 +310,11 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
     strong { color: var(--text); }
     .keywords { display: flex; flex-wrap: wrap; gap: 6px; }
     .keywords span { padding: 4px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 800; }
-    .actions { margin: 10px 0 0; padding-left: 18px; color: var(--text); font-size: 12.7px; }
-    .actions li { margin-bottom: 7px; break-inside: avoid; page-break-inside: avoid; }
-    .actions span { color: var(--muted); }
-    .strategy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .actions { margin: 10px 0 0; padding-left: 0; color: var(--text); font-size: 12.7px; list-style: none; }
+    .actions li { display: grid; grid-template-columns: 24px 1fr; gap: 8px; margin-bottom: 7px; break-inside: avoid; page-break-inside: avoid; }
+    .action-no { width: 22px; height: 22px; border-radius: 999px; background: var(--primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; }
+    .actions em { color: var(--muted); font-style: normal; }
+    .strategy-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr); gap: 10px; align-items: start; }
     .privacy { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 11.5px; }
     @media print {
       body { background: #fff; }
