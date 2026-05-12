@@ -43,6 +43,63 @@ function toText(value: unknown): string {
   return String(value);
 }
 
+function stripPresentationMarkdown(value: string) {
+  return value
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim();
+}
+
+function renderInlineMarkdown(value: string) {
+  const parts = value.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index} style={{ color: T.text, fontWeight: 850 }}>{part.slice(2, -2)}</strong>;
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
+function RichText({
+  value,
+  fontSize = 16,
+  color = T.textMuted,
+  lineHeight = 1.75,
+}: {
+  value: unknown;
+  fontSize?: number;
+  color?: string;
+  lineHeight?: number;
+}) {
+  const text = toText(value).trim() || '-';
+  const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize, color, lineHeight, fontFamily: FONT }}>
+      {lines.map((line, index) => {
+        const bullet = /^[-*]\s+/.test(line);
+        const numbered = /^\d+[.)]\s+/.test(line);
+        const content = line
+          .replace(/^#{1,6}\s+/, '')
+          .replace(/^[-*]\s+/, '')
+          .replace(/^\d+[.)]\s+/, '');
+
+        if (bullet || numbered) {
+          return (
+            <div key={`${index}-${content}`} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 7, alignItems: 'start' }}>
+              <span style={{ color: T.primary, fontWeight: 900, lineHeight }}>{numbered ? `${line.match(/^\d+/)?.[0]}.` : '•'}</span>
+              <span>{renderInlineMarkdown(content)}</span>
+            </div>
+          );
+        }
+
+        return <p key={`${index}-${content}`} style={{ margin: 0 }}>{renderInlineMarkdown(content)}</p>;
+      })}
+    </div>
+  );
+}
+
 // ── 키워드 추출 ───────────────────────────────────────────────────────────────
 const STOPWORDS = new Set([
   '및', '을', '를', '이', '가', '은', '는', '에', '의', '로', '에서', '으로', '과', '와', '도',
@@ -58,7 +115,7 @@ const STOPWORDS = new Set([
 ]);
 
 function extractKeywords(texts: string[]): { text: string; size: number }[] {
-  const combined = texts.join(' ');
+  const combined = texts.map(stripPresentationMarkdown).join(' ');
   const tokens = combined.replace(/[^가-힣a-zA-Z\s]/g, ' ').split(/\s+/).filter(t => t.length >= 2 && !STOPWORDS.has(t));
   const freq: Record<string, number> = {};
   tokens.forEach(t => { freq[t] = (freq[t] ?? 0) + 1; });
@@ -83,15 +140,34 @@ function KeywordCloud({ words }: { words: { text: string; size: number }[] }) {
 
 function ScoreBar({ label, score, color, soft }: { label: string; score: number; color: string; soft: string }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, fontFamily: FONT }}>{label}</span>
-        <span style={{ fontSize: 18, fontWeight: 800, color, fontFamily: FONT }}>{score}점</span>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <span style={{ fontSize: 16, fontWeight: 800, color: T.text, fontFamily: FONT }}>{label}</span>
+        <span style={{ fontSize: 34, fontWeight: 900, color, fontFamily: FONT, lineHeight: 1 }}>{score}<span style={{ fontSize: 15, color: T.textSubtle, marginLeft: 3 }}>/100</span></span>
       </div>
-      <div style={{ height: 8, borderRadius: 4, background: soft }}>
+      <div style={{ height: 12, borderRadius: 999, background: soft }}>
         <div style={{ height: '100%', borderRadius: 4, background: color, width: `${score}%`, transition: 'width 0.6s ease' }} />
       </div>
     </div>
+  );
+}
+
+function RadarTick({ x, y, payload }: { x?: number; y?: number; payload?: { value?: string } }) {
+  const label = payload?.value ?? '';
+  const lines = label === '공동체역량'
+    ? ['공동체', '역량']
+    : label === '학업역량'
+      ? ['학업', '역량']
+      : label === '진로역량'
+        ? ['진로', '역량']
+        : [label];
+
+  return (
+    <text x={x} y={y} textAnchor="middle" fill={T.text} fontSize={15} fontWeight={850} fontFamily={FONT}>
+      {lines.map((line, index) => (
+        <tspan key={line} x={x} dy={index === 0 ? 0 : 17}>{line}</tspan>
+      ))}
+    </text>
   );
 }
 
@@ -103,9 +179,9 @@ function CompRadar({ scores, height = 240 }: { scores: SegibuAnalysis['scores'];
   ];
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <RadarChart data={data} margin={{ top: 10, right: 20, left: 20, bottom: 10 }}>
+      <RadarChart data={data} margin={{ top: 28, right: 70, left: 70, bottom: 34 }}>
         <PolarGrid stroke={T.border} />
-        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 13, fill: T.text, fontFamily: FONT, fontWeight: 800 }} />
+        <PolarAngleAxis dataKey="subject" tick={<RadarTick />} />
         <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
         <Radar dataKey="value" stroke={T.primary} fill={T.primary} fillOpacity={0.2} strokeWidth={2.5} />
       </RadarChart>
@@ -117,11 +193,9 @@ function HighlightPill({ label, text, color, soft }: { label: string; text: stri
   const displayText = text?.trim();
   const missing = !displayText || displayText === '관련 내용 없음';
   return (
-    <div style={{ padding: '8px 12px', borderRadius: 8, background: missing ? T.surfaceAlt : soft, borderLeft: `3px solid ${color}`, marginBottom: 6, opacity: missing ? 0.78 : 1 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: missing ? T.textSubtle : color, letterSpacing: '0.04em', display: 'block', marginBottom: 2, fontFamily: FONT }}>{label}</span>
-      <p style={{ fontSize: 13, color: missing ? T.textSubtle : T.textMuted, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>
-        {missing ? '해당 영역에서는 뚜렷한 근거가 부족합니다.' : displayText}
-      </p>
+    <div style={{ padding: '11px 13px', borderRadius: 8, background: missing ? T.surfaceAlt : soft, borderLeft: `4px solid ${color}`, marginBottom: 8, opacity: missing ? 0.78 : 1 }}>
+      <span style={{ fontSize: 12, fontWeight: 850, color: missing ? T.textSubtle : color, letterSpacing: '0.04em', display: 'block', marginBottom: 4, fontFamily: FONT }}>{label}</span>
+      <RichText value={missing ? '해당 영역에서는 뚜렷한 근거가 부족합니다.' : displayText} fontSize={14} color={missing ? T.textSubtle : T.textMuted} lineHeight={1.6} />
     </div>
   );
 }
@@ -133,8 +207,8 @@ function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['a
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px', gridColumn: '1 / -1' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 6, fontFamily: FONT }}>상담 처방 요약</div>
-          <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT }}>{readiness.overall}</p>
+          <div style={{ fontSize: 20, fontWeight: 900, color: T.text, marginBottom: 8, fontFamily: FONT }}>상담 처방 요약</div>
+          <RichText value={readiness.overall} fontSize={16} color={T.textMuted} lineHeight={1.75} />
         </div>
         <span style={{ flexShrink: 0, padding: '4px 9px', borderRadius: 999, background: T.bgAlt, color: T.textMuted, fontSize: 12, fontWeight: 700, fontFamily: FONT }}>
           신뢰도 {confidenceLabel}
@@ -146,10 +220,10 @@ function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['a
           {readiness.criticalWeaknesses.slice(0, 3).map((item, index) => {
             const comp = T.comp[item.competency];
             return (
-              <div key={`${item.competency}-${index}`} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', background: T.surfaceAlt, borderTop: `3px solid ${comp.color}` }}>
-                <div style={{ fontSize: 11, color: comp.color, fontWeight: 800, letterSpacing: '0.04em', marginBottom: 5, fontFamily: FONT }}>{COMP_LABELS[item.competency]} 보완</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.45, marginBottom: 6, fontFamily: FONT }}>{item.issue}</div>
-                <p style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>{item.recommendation}</p>
+              <div key={`${item.competency}-${index}`} style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: '15px 16px', background: T.surfaceAlt, borderTop: `4px solid ${comp.color}` }}>
+                <div style={{ fontSize: 12, color: comp.color, fontWeight: 900, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>{COMP_LABELS[item.competency]} 보완</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: T.text, lineHeight: 1.45, marginBottom: 7, fontFamily: FONT }}>{stripPresentationMarkdown(item.issue)}</div>
+                <RichText value={item.recommendation} fontSize={14} color={T.textMuted} lineHeight={1.65} />
               </div>
             );
           })}
@@ -159,12 +233,12 @@ function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['a
       {readiness.nextActions.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {readiness.nextActions.slice(0, 4).map(action => (
-            <div key={`${action.priority}-${action.action}`} style={{ display: 'grid', gridTemplateColumns: '32px 94px 1fr', gap: 10, alignItems: 'start', padding: '10px 12px', borderRadius: 10, background: T.bgAlt }}>
-              <div style={{ width: 24, height: 24, borderRadius: 999, background: T.primary, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>{action.priority}</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: T.primary, fontFamily: FONT }}>{SERVICE_LABELS[action.linkedService]}</div>
+            <div key={`${action.priority}-${action.action}`} style={{ display: 'grid', gridTemplateColumns: '34px 108px 1fr', gap: 11, alignItems: 'start', padding: '12px 14px', borderRadius: 11, background: T.bgAlt }}>
+              <div style={{ width: 26, height: 26, borderRadius: 999, background: T.primary, color: '#fff', fontSize: 13, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>{action.priority}</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: T.primary, fontFamily: FONT }}>{SERVICE_LABELS[action.linkedService]}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, lineHeight: 1.5, fontFamily: FONT }}>{action.action}</div>
-                <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55, fontFamily: FONT }}>{action.reason}</div>
+                <div style={{ fontSize: 15, fontWeight: 850, color: T.text, lineHeight: 1.5, fontFamily: FONT }}>{stripPresentationMarkdown(action.action)}</div>
+                <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.55, fontFamily: FONT }}>{stripPresentationMarkdown(action.reason)}</div>
               </div>
             </div>
           ))}
@@ -175,11 +249,9 @@ function ReadinessCard({ readiness }: { readiness: NonNullable<SegibuAnalysis['a
         <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#F8FAFC', border: `1px solid ${T.border}` }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: T.textSubtle, marginBottom: 4, fontFamily: FONT }}>분석 신뢰도 메모</div>
           {readiness.reliability.missingData.length > 0 && (
-            <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>누락 가능 데이터: {readiness.reliability.missingData.join(', ')}</div>
+            <div style={{ fontSize: 13.5, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>누락 가능 데이터: {readiness.reliability.missingData.join(', ')}</div>
           )}
-          {readiness.reliability.notes && (
-            <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{readiness.reliability.notes}</div>
-          )}
+          {readiness.reliability.notes && <RichText value={readiness.reliability.notes} fontSize={13.5} color={T.textMuted} lineHeight={1.6} />}
         </div>
       )}
     </div>
@@ -236,12 +308,12 @@ function readinessHtml(readiness: SegibuAnalysis['admissionsReadiness']) {
   const weaknesses = readiness.criticalWeaknesses.slice(0, 4).map((item) => `
     <div class="weakness">
       <div class="chip">${escapeHtml(COMP_LABELS[item.competency])} 보완</div>
-      <strong>${escapeHtml(item.issue)}</strong>
-      <p>${escapeHtml(item.recommendation)}</p>
+      <strong>${escapeHtml(stripPresentationMarkdown(item.issue))}</strong>
+      ${formatHtmlBlock(item.recommendation)}
     </div>
   `).join('');
   const actions = readiness.nextActions.slice(0, 5).map((action) => `
-    <li><span class="action-no">${action.priority}</span><div><strong>${escapeHtml(SERVICE_LABELS[action.linkedService])}</strong> ${escapeHtml(action.action)}<br /><em>${escapeHtml(action.reason)}</em></div></li>
+    <li><span class="action-no">${action.priority}</span><div><strong>${escapeHtml(SERVICE_LABELS[action.linkedService])}</strong> ${escapeHtml(stripPresentationMarkdown(action.action))}<br /><em>${escapeHtml(stripPresentationMarkdown(action.reason))}</em></div></li>
   `).join('');
 
   return `
@@ -465,31 +537,31 @@ export function StudentReportView({
   const openPrintDocument = () => openSegibuReportPrintWindow(r, resolvedStudentName, keywords);
 
   const tabStyle = (active: boolean) => ({
-    padding: '6px 14px', fontSize: 13, fontWeight: active ? 700 : 500, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT,
+    padding: '8px 16px', fontSize: 15, fontWeight: active ? 850 : 650, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT,
     background: active ? T.primary : 'transparent',
     color: active ? '#fff' : T.textMuted,
     transition: 'all 0.15s',
   });
   const subTabStyle = (active: boolean) => ({
-    padding: '4px 12px', fontSize: 12, fontWeight: active ? 700 : 500, borderRadius: 16, border: `1px solid ${active ? T.primary : T.border}`, cursor: 'pointer', fontFamily: FONT,
+    padding: '7px 14px', fontSize: 14, fontWeight: active ? 850 : 650, borderRadius: 16, border: `1px solid ${active ? T.primary : T.border}`, cursor: 'pointer', fontFamily: FONT,
     background: active ? T.primarySoft : T.surface,
     color: active ? T.primary : T.textMuted,
   });
 
   return (
-    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16, background: embedded ? 'transparent' : T.bg }}>
+    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 20, background: embedded ? 'transparent' : T.bg }}>
 
       {/* ── 헤더 ── */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: embedded ? '16px 18px' : '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: embedded ? '22px 24px' : '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
             <span style={{ padding: '2px 9px', fontSize: 12, borderRadius: 4, background: T.primarySoft, color: T.primary, fontWeight: 700, fontFamily: FONT }}>학생부 종합 리포트</span>
             {r.targetDept && <span style={{ padding: '2px 9px', fontSize: 12, borderRadius: 4, background: T.bg, color: T.textMuted, fontWeight: 600, fontFamily: FONT }}>목표: {r.targetDept}</span>}
           </div>
-          <div style={{ fontSize: embedded ? 18 : 'clamp(18px, 2vw, 24px)', fontWeight: 800, color: T.text, letterSpacing: '-0.03em', fontFamily: FONT }}>
+          <div style={{ fontSize: embedded ? 24 : 'clamp(24px, 2.2vw, 34px)', fontWeight: 900, color: T.text, letterSpacing: 0, fontFamily: FONT, lineHeight: 1.22 }}>
             {embedded ? '분석 결과를 읽기 쉬운 상담 리포트로 정리했습니다.' : `${resolvedStudentName} 학생 학생부 리포트`}
           </div>
-          {!embedded && r.school && <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 3, fontFamily: FONT }}>{r.school}</div>}
+          {!embedded && r.school && <div style={{ fontSize: 15, color: T.textSubtle, marginTop: 5, fontFamily: FONT }}>{r.school}</div>}
         </div>
         {!embedded && (
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -506,7 +578,7 @@ export function StudentReportView({
 
       {/* ── 메인 탭 ── */}
       {!embedded && (
-        <div style={{ display: 'flex', gap: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '6px 8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 7, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '7px 9px', flexWrap: 'wrap' }}>
           {([['overview', '종합 현황'], ['changche', '창의적 체험활동'], ['curriculum', '교과 세부능력'], ['behavior', '행동 특성'], ['critical', '비판적 분석']] as const).map(([k, l]) => (
             <button key={k} style={tabStyle(mainTab === k)} onClick={() => setMainTab(k)}>{l}</button>
           ))}
@@ -515,42 +587,42 @@ export function StudentReportView({
 
       {/* ── 종합 현황 ── */}
       {activeMainTab === 'overview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: 18 }}>
 
-          {/* 역량 레이더 */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 12, fontFamily: FONT }}>3대 역량 레이더</div>
-            <CompRadar scores={r.scores} height={embedded ? 300 : 260} />
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8 }}>
-              {(['academic', 'career', 'community'] as const).map(k => (
-                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.comp[k].color }} />
-                  <span style={{ fontSize: 11, color: T.textSubtle, fontFamily: FONT }}>{T.comp[k].label} {r.scores[k]}점</span>
+          <section style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '28px 30px', gridColumn: '1 / -1' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 900, color: T.primary, letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONT }}>한눈에 보는 3대 역량</div>
+                <h2 style={{ fontSize: 'clamp(24px, 2vw, 32px)', lineHeight: 1.25, margin: 0, color: T.text, fontWeight: 900, fontFamily: FONT }}>레이더와 점수로 먼저 판단합니다</h2>
+              </div>
+              <div style={{ minWidth: 150, padding: '10px 16px', borderRadius: 12, background: T.primarySoft, border: `1px solid ${T.primaryBorder}`, textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 850, color: T.primary, fontFamily: FONT }}>종합 평균</div>
+                <div style={{ fontSize: 42, fontWeight: 950, color: T.primary, lineHeight: 1, fontFamily: FONT }}>{avg3}<span style={{ fontSize: 16, marginLeft: 3 }}>/100</span></div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 26, alignItems: 'stretch' }}>
+              <div style={{ flex: '1 1 560px', minWidth: 0, background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: 14, padding: '10px 12px 0' }}>
+                <CompRadar scores={r.scores} height={embedded ? 390 : 360} />
+              </div>
+
+              <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                  <div style={{ fontSize: 19, fontWeight: 900, color: T.text, fontFamily: FONT }}>역량 점수</div>
+                  <div style={{ fontSize: 13, color: T.textSubtle, fontFamily: FONT }}>전국 평균 기준 70점</div>
                 </div>
-              ))}
+                <ScoreBar label="학업 역량" score={r.scores.academic}  color={T.comp.academic.color}  soft={T.comp.academic.soft} />
+                <ScoreBar label="진로 역량" score={r.scores.career}    color={T.comp.career.color}    soft={T.comp.career.soft} />
+                <ScoreBar label="공동체 역량" score={r.scores.community} color={T.comp.community.color} soft={T.comp.community.soft} />
+              </div>
             </div>
-          </div>
-
-          {/* 역량 점수 */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text, fontFamily: FONT }}>역량 점수</div>
-              <div style={{ fontSize: 11, color: T.textSubtle, fontFamily: FONT }}>전국 평균 기준 70점</div>
-            </div>
-            <ScoreBar label="학업 역량" score={r.scores.academic}  color={T.comp.academic.color}  soft={T.comp.academic.soft} />
-            <ScoreBar label="진로 역량" score={r.scores.career}    color={T.comp.career.color}    soft={T.comp.career.soft} />
-            <ScoreBar label="공동체 역량" score={r.scores.community} color={T.comp.community.color} soft={T.comp.community.soft} />
-            <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: T.primarySoft, border: `1px solid ${T.primaryBorder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: T.primary, fontFamily: FONT }}>종합 평균</span>
-              <span style={{ fontSize: 24, fontWeight: 800, color: T.primary, fontFamily: FONT }}>{avg3}점</span>
-            </div>
-          </div>
+          </section>
 
           {/* 핵심 키워드 */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px', gridColumn: '1 / -1' }}>
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 26px', gridColumn: '1 / -1' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text, fontFamily: FONT }}>핵심 키워드</div>
-              <div style={{ fontSize: 11, color: T.textSubtle, fontFamily: FONT }}>전체 기록 기반 · 글자 크기 = 빈도</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: T.text, fontFamily: FONT }}>핵심 키워드</div>
+              <div style={{ fontSize: 13, color: T.textSubtle, fontFamily: FONT }}>상담 요약 기반 · 글자 크기 = 빈도</div>
             </div>
             <KeywordCloud words={keywords} />
           </div>
@@ -559,23 +631,23 @@ export function StudentReportView({
 
           {/* 역량 요약 */}
           {(['academic', 'career', 'community'] as const).map(k => (
-            <div key={k} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px', borderTop: `4px solid ${T.comp[k].color}` }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.comp[k].color, marginBottom: 8, fontFamily: FONT }}>{T.comp[k].label}</div>
-              <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT }}>{r.summaryHighlights[k]}</p>
+            <div key={k} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 24px', borderTop: `5px solid ${T.comp[k].color}`, gridColumn: 'span 4' }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: T.comp[k].color, marginBottom: 10, fontFamily: FONT }}>{T.comp[k].label}</div>
+              <RichText value={r.summaryHighlights[k]} fontSize={15.5} color={T.textMuted} lineHeight={1.7} />
             </div>
           ))}
 
           {/* 향후 전략 */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px', gridColumn: '1 / -1' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 14, fontFamily: FONT }}>향후 전략 제언</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ padding: '14px 16px', borderRadius: 10, background: T.primarySoft, border: `1px solid ${T.primaryBorder}` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>심화 탐구 제안</div>
-                <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT, whiteSpace: 'pre-line' }}>{toText(r.futureStrategy.deepDive)}</p>
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '26px 28px', gridColumn: '1 / -1' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: T.text, marginBottom: 16, fontFamily: FONT }}>향후 전략 제언</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 0.85fr)', gap: 16 }}>
+              <div style={{ padding: '18px 20px', borderRadius: 12, background: T.primarySoft, border: `1px solid ${T.primaryBorder}` }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: T.primary, letterSpacing: '0.04em', marginBottom: 10, fontFamily: FONT }}>심화 탐구 제안</div>
+                <RichText value={r.futureStrategy.deepDive} fontSize={16} color={T.textMuted} lineHeight={1.72} />
               </div>
-              <div style={{ padding: '14px 16px', borderRadius: 10, background: T.warningSoft, border: `1px solid #FCD89A` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.warning, letterSpacing: '0.04em', marginBottom: 6, fontFamily: FONT }}>연계 추천 과목</div>
-                <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.7, margin: 0, fontFamily: FONT, whiteSpace: 'pre-line' }}>{toText(r.futureStrategy.subjects)}</p>
+              <div style={{ padding: '18px 20px', borderRadius: 12, background: T.warningSoft, border: `1px solid #FCD89A` }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: T.warning, letterSpacing: '0.04em', marginBottom: 10, fontFamily: FONT }}>연계 추천 과목</div>
+                <RichText value={r.futureStrategy.subjects} fontSize={16} color={T.textMuted} lineHeight={1.72} />
               </div>
             </div>
           </div>
