@@ -1,6 +1,13 @@
 'use client';
-import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
+import {
+  PresentationText,
+  escapeHtml,
+  formatPrintInlineHtml,
+  renderInlineMarkdown,
+  stripPresentationMarkdown,
+} from './PresentationText';
 import {
   getNaesinData,
   getPrimaryTargetPick,
@@ -126,28 +133,13 @@ function getTargetLabel(targetPick: UniversityTargetPick | null, fallbackDept: s
   return [targetPick?.name, dept].filter(Boolean).join(' ');
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function formatInlineHtml(value: string) {
-  return escapeHtml(value)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br />');
-}
-
 function renderPlanContent(item: PlanItem) {
   if (item.isStepByStep && item.steps) {
     return item.steps
-      .map((step) => `<div class="step"><strong>${escapeHtml(step.step)} ${formatInlineHtml(step.title)}</strong><span>${formatInlineHtml(step.description)}</span></div>`)
+      .map((step) => `<div class="step"><strong>${escapeHtml(stripPresentationMarkdown(step.step))} ${formatPrintInlineHtml(step.title)}</strong><span>${formatPrintInlineHtml(step.description)}</span></div>`)
       .join('');
   }
-  return formatInlineHtml(item.content ?? '');
+  return formatPrintInlineHtml(item.content ?? '');
 }
 
 function renderDraftParagraphs(draft: string) {
@@ -158,7 +150,7 @@ function renderDraftParagraphs(draft: string) {
 
   const safeParagraphs = paragraphs.length > 0 ? paragraphs : ['세특 초안이 없습니다.'];
   return safeParagraphs
-    .map((paragraph) => `<p class="draft">${formatInlineHtml(paragraph)}</p>`)
+    .map((paragraph) => `<p class="draft">${formatPrintInlineHtml(paragraph)}</p>`)
     .join('');
 }
 
@@ -210,23 +202,23 @@ function buildSeteukPrintHtml({
     .sheet { width: 210mm; min-height: 297mm; margin: 0 auto 28px; padding: 14mm; background: #fff; box-shadow: 0 16px 42px rgba(25, 31, 40, 0.12); }
     .header { border-bottom: 2px solid var(--text); padding-bottom: 13px; margin-bottom: 18px; break-inside: avoid; page-break-inside: avoid; }
     .eyebrow { font-size: 11px; font-weight: 900; color: var(--indigo); letter-spacing: 0; margin-bottom: 5px; }
-    h1 { font-size: 22px; line-height: 1.28; margin: 0; letter-spacing: 0; }
-    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+    h1 { font-size: 24px; line-height: 1.28; margin: 0; letter-spacing: 0; }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; color: var(--muted); font-size: 13px; font-weight: 700; }
     .meta span { padding: 2px 8px; border-radius: 999px; background: #F8FAFC; border: 1px solid var(--line); }
     .section-title { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin: 22px 0 9px; padding-bottom: 7px; border-bottom: 2px solid var(--indigo); break-after: avoid; page-break-after: avoid; }
     .section-title.green { border-bottom-color: var(--green); }
-    .section-title h2 { font-size: 17px; line-height: 1.35; margin: 0; letter-spacing: 0; }
-    table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 13px; background: #fff; }
+    .section-title h2 { font-size: 18px; line-height: 1.35; margin: 0; letter-spacing: 0; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 13.5px; background: #fff; }
     tr { break-inside: avoid; page-break-inside: avoid; }
     tr + tr th, tr + tr td { border-top: 1px solid var(--line); }
-    th, td { padding: 10px 12px; vertical-align: top; line-height: 1.65; }
-    th { width: 31mm; background: var(--indigo-soft); color: #3730A3; text-align: left; font-size: 12.5px; font-weight: 900; border-right: 1px solid var(--border); white-space: pre-line; }
+    th, td { padding: 11px 13px; vertical-align: top; line-height: 1.7; }
+    th { width: 31mm; background: var(--indigo-soft); color: #3730A3; text-align: left; font-size: 13px; font-weight: 900; border-right: 1px solid var(--border); white-space: pre-line; }
     .step { display: grid; grid-template-columns: 18mm minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px dashed var(--line); break-inside: avoid; page-break-inside: avoid; }
     .step:first-child { padding-top: 0; border-top: 0; }
     .step strong { align-self: start; border-radius: 5px; background: var(--indigo); color: #fff; font-size: 10.5px; font-weight: 900; text-align: center; padding: 3px 4px; line-height: 1.35; }
-    .step span { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+    .step span { display: block; color: var(--muted); font-size: 13px; line-height: 1.65; }
     .empty { text-align: center; color: var(--subtle); }
-    .draft { margin: 0 0 8px; border: 1px solid var(--green-line); background: var(--green-soft); border-radius: 8px; padding: 10px 12px; line-height: 1.82; white-space: pre-wrap; font-size: 13.5px; break-inside: avoid; page-break-inside: avoid; }
+    .draft { margin: 0 0 8px; border: 1px solid var(--green-line); background: var(--green-soft); border-radius: 8px; padding: 11px 13px; line-height: 1.82; white-space: pre-wrap; font-size: 14px; break-inside: avoid; page-break-inside: avoid; }
     @media print {
       body { background: #fff; }
       .toolbar { display: none; }
@@ -607,48 +599,6 @@ function RemediationPanel({
       )}
     </SectionCard>
   );
-}
-
-function renderInlineMarkdown(value: string) {
-  return value.split(/(\*\*.+?\*\*)/g).filter(Boolean).map((part, index) => {
-    const bold = part.match(/^\*\*(.+?)\*\*$/);
-    if (bold) return <strong key={index}>{bold[1]}</strong>;
-    return <Fragment key={index}>{part}</Fragment>;
-  });
-}
-
-function RichTextBlock({
-  value,
-  emptyText,
-  fontSize = 15,
-}: {
-  value: string;
-  emptyText: string;
-  fontSize?: number;
-}) {
-  const paragraphs = (value || emptyText)
-    .split(/\n{2,}/g)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  return (
-    <>
-      {paragraphs.map((paragraph, index) => (
-        <p key={index} style={{ margin: index === 0 ? 0 : '10px 0 0', fontSize, color: T.text, lineHeight: 1.85, fontFamily: FONT }}>
-          {paragraph.split('\n').map((line, lineIndex) => (
-            <Fragment key={lineIndex}>
-              {lineIndex > 0 && <br />}
-              {renderInlineMarkdown(line)}
-            </Fragment>
-          ))}
-        </p>
-      ))}
-    </>
-  );
-}
-
-function stripPresentationMarkdown(value: string) {
-  return value.replace(/\*\*(.+?)\*\*/g, '$1').trim();
 }
 
 // ─── Phase 1: 기본 정보 ───────────────────────────────────────────────────────
@@ -1061,14 +1011,14 @@ function Phase6({
                                 {s.step}
                               </div>
                               <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3, fontFamily: FONT }}>{renderInlineMarkdown(s.title)}</div>
-                                <div style={{ fontSize: 13, color: T.textMuted, fontFamily: FONT, lineHeight: 1.65 }}>{renderInlineMarkdown(s.description)}</div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4, fontFamily: FONT, lineHeight: 1.45 }}>{renderInlineMarkdown(s.title)}</div>
+                                <div style={{ fontSize: 14.5, color: T.textMuted, fontFamily: FONT, lineHeight: 1.7 }}>{renderInlineMarkdown(s.description)}</div>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <RichTextBlock value={item.content ?? ''} emptyText="내용 없음" fontSize={14} />
+                        <PresentationText value={item.content ?? ''} emptyText="내용 없음" fontSize={15} lineHeight={1.75} />
                       )}
                     </td>
                   </tr>
@@ -1098,8 +1048,8 @@ function Phase6({
             {copied ? '✓ 복사됨' : '세특 초안 복사'}
           </button>
         </div>
-        <div style={{ background: '#F0FDF4', border: `1px solid #BBF7D0`, borderRadius: 12, padding: '20px 22px', fontSize: 15, color: T.text, lineHeight: 1.9, fontFamily: FONT }}>
-          <RichTextBlock value={draft} emptyText="세특 초안이 없습니다." />
+        <div style={{ background: '#F0FDF4', border: `1px solid #BBF7D0`, borderRadius: 12, padding: '22px 24px', fontSize: 16, color: T.text, lineHeight: 1.9, fontFamily: FONT }}>
+          <PresentationText value={draft} emptyText="세특 초안이 없습니다." fontSize={16} lineHeight={1.9} />
         </div>
         <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 8, textAlign: 'right', fontFamily: FONT }}>
           총 {stripPresentationMarkdown(draft).length}자

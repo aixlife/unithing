@@ -2,6 +2,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 import {
+  PresentationText,
+  escapeHtml,
+  formatPrintHtmlBlock,
+  stripPresentationMarkdown,
+} from './PresentationText';
+import {
   getLatestRoadmapSnapshot,
   getLatestSeteukRecord,
   getNaesinData,
@@ -79,34 +85,15 @@ function buildSnapshot(input: {
   };
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function formatPrintBlock(value: string) {
-  const paragraphs = (value || '-')
-    .split(/\n{2,}/g)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-  return paragraphs
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br />')}</p>`)
-    .join('');
-}
-
 function buildRoadmapPrintHtml(snapshot: RoadmapSnapshot, statuses: RoadmapStatus[], savedAtLabel: string, studentMeta: string) {
   const statusRows = statuses.map((item) => `
     <div class="status ${item.done ? 'done' : ''}">
-      <strong>${escapeHtml(item.label)}</strong>
-      <span>${escapeHtml(item.detail)}</span>
+      <strong>${escapeHtml(stripPresentationMarkdown(item.label))}</strong>
+      <span>${escapeHtml(stripPresentationMarkdown(item.detail))}</span>
     </div>
   `).join('');
   const checklist = snapshot.nextChecklist.map((item, index) => `
-    <li><strong>${index + 1}</strong><span>${escapeHtml(item)}</span></li>
+    <li><strong>${index + 1}</strong><span>${escapeHtml(stripPresentationMarkdown(item))}</span></li>
   `).join('');
 
   return `<!doctype html>
@@ -135,18 +122,18 @@ function buildRoadmapPrintHtml(snapshot: RoadmapSnapshot, statuses: RoadmapStatu
     .sheet { width: 210mm; min-height: 297mm; margin: 0 auto 28px; padding: 14mm; background: #fff; box-shadow: 0 16px 42px rgba(25,31,40,0.12); }
     header { border-bottom: 2px solid var(--text); padding-bottom: 13px; margin-bottom: 15px; break-inside: avoid; page-break-inside: avoid; }
     .eyebrow { color: var(--primary); font-size: 11px; font-weight: 900; margin-bottom: 5px; }
-    h1 { margin: 0; font-size: 23px; line-height: 1.28; letter-spacing: 0; }
-    .meta { margin-top: 8px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+    h1 { margin: 0; font-size: 24px; line-height: 1.28; letter-spacing: 0; }
+    .meta { margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
     .status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 16px; }
     .status { border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px; background: #fff; min-height: 58px; }
     .status.done { background: var(--success-soft); border-color: #86EFAC; }
     .status strong { display: block; font-size: 11.5px; color: var(--text); margin-bottom: 3px; }
     .status span { display: block; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .section { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+    .section { border: 1px solid var(--line); border-radius: 8px; padding: 12px 13px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
     .section.wide { grid-column: 1 / -1; }
-    h2 { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-soft); font-size: 15.5px; line-height: 1.35; }
-    p { margin: 0; color: var(--muted); font-size: 12.3px; line-height: 1.7; }
+    h2 { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-soft); font-size: 17px; line-height: 1.35; }
+    p { margin: 0; color: var(--muted); font-size: 13.2px; line-height: 1.75; }
     p + p { margin-top: 7px; }
     ol { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0; margin: 0; }
     li { display: grid; grid-template-columns: 24px 1fr; gap: 8px; padding: 8px 9px; border-radius: 8px; background: #F8FAFC; border: 1px solid var(--line); break-inside: avoid; page-break-inside: avoid; }
@@ -173,10 +160,10 @@ function buildRoadmapPrintHtml(snapshot: RoadmapSnapshot, statuses: RoadmapStatu
     </header>
     <section class="status-grid">${statusRows}</section>
     <div class="grid">
-      <section class="section wide"><h2>현재 학생부 요약</h2>${formatPrintBlock(snapshot.analysisSummary)}</section>
-      <section class="section"><h2>목표 대학 3 Picks</h2>${formatPrintBlock(snapshot.targetSummary)}</section>
-      <section class="section"><h2>과목 선택안</h2>${formatPrintBlock(snapshot.subjectSummary)}</section>
-      <section class="section wide"><h2>세특 활동안</h2>${formatPrintBlock(snapshot.seteukSummary)}</section>
+      <section class="section wide"><h2>현재 학생부 요약</h2>${formatPrintHtmlBlock(snapshot.analysisSummary)}</section>
+      <section class="section"><h2>목표 대학 3 Picks</h2>${formatPrintHtmlBlock(snapshot.targetSummary)}</section>
+      <section class="section"><h2>과목 선택안</h2>${formatPrintHtmlBlock(snapshot.subjectSummary)}</section>
+      <section class="section wide"><h2>세특 활동안</h2>${formatPrintHtmlBlock(snapshot.seteukSummary)}</section>
       <section class="section wide"><h2>다음 상담 체크리스트</h2><ol>${checklist}</ol></section>
     </div>
     <footer>화면 조작 버튼과 탭은 출력물에서 제외했습니다.</footer>
@@ -208,10 +195,10 @@ function Section({
           onClick();
         }
       }}
-      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 22, cursor: onClick ? 'pointer' : 'default' }}
+      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, cursor: onClick ? 'pointer' : 'default' }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: T.text, fontFamily: FONT }}>{title}</h3>
+        <h3 style={{ margin: 0, fontSize: 19, fontWeight: 900, color: T.text, fontFamily: FONT, lineHeight: 1.35 }}>{title}</h3>
         {action && <div onClick={(event) => event.stopPropagation()}>{action}</div>}
       </div>
       {children}
@@ -227,8 +214,8 @@ function StatusStrip({ statuses }: { statuses: RoadmapStatus[] }) {
           <div style={{ fontSize: 12, fontWeight: 800, color: item.done ? T.success : T.textSubtle, marginBottom: 5, fontFamily: FONT }}>
             {item.done ? '완료' : '필요'}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 4, fontFamily: FONT }}>{item.label}</div>
-          <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.45, fontFamily: FONT }}>{item.detail}</div>
+          <div style={{ fontSize: 15, fontWeight: 850, color: T.text, marginBottom: 4, fontFamily: FONT }}>{item.label}</div>
+          <div style={{ fontSize: 13.5, color: T.textMuted, lineHeight: 1.5, fontFamily: FONT }}>{stripPresentationMarkdown(item.detail)}</div>
         </div>
       ))}
     </div>
@@ -243,8 +230,8 @@ function PickList({ picks }: { picks: ReturnType<typeof getUniversityPicks> }) {
         return (
           <div key={slot} style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 10, alignItems: 'start', padding: '10px 12px', borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 12, fontWeight: 800, color: pick ? T.primary : T.textSubtle, fontFamily: FONT }}>{label}</span>
-            <div style={{ fontSize: 13, color: pick ? T.text : T.textSubtle, lineHeight: 1.55, fontFamily: FONT }}>
-              {summarizePick(pick)}
+            <div style={{ fontSize: 14, color: pick ? T.text : T.textSubtle, lineHeight: 1.6, fontFamily: FONT }}>
+              {stripPresentationMarkdown(summarizePick(pick))}
             </div>
           </div>
         );
@@ -419,13 +406,13 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(320px, 0.85fr)', gap: 16 }}>
         <Section title="현재 학생부 요약" onClick={() => onOpenService?.(3)} action={<button onClick={() => onOpenService?.(3)} style={linkButtonStyle()}>분석 열기</button>}>
-          <p style={{ margin: 0, fontSize: 14, color: T.textMuted, lineHeight: 1.75, fontFamily: FONT }}>{snapshot.analysisSummary}</p>
+          <PresentationText value={snapshot.analysisSummary} fontSize={16} color={T.textMuted} lineHeight={1.75} />
           {readiness?.criticalWeaknesses.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
               {readiness.criticalWeaknesses.slice(0, 3).map((item, index) => (
                 <div key={`${item.competency}-${index}`} style={{ padding: '10px 12px', borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 4, fontFamily: FONT }}>{item.issue}</div>
-                  <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55, fontFamily: FONT }}>{item.recommendation}</div>
+                  <div style={{ fontSize: 15, fontWeight: 850, color: T.text, marginBottom: 5, fontFamily: FONT, lineHeight: 1.45 }}>{stripPresentationMarkdown(item.issue)}</div>
+                  <PresentationText value={item.recommendation} fontSize={14.5} color={T.textMuted} lineHeight={1.65} />
                 </div>
               ))}
             </div>
@@ -449,14 +436,14 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
         <Section title="세특 활동안" onClick={() => onOpenService?.(4)} action={<button onClick={() => onOpenService?.(4)} style={linkButtonStyle()}>세특 도우미</button>}>
           {latestSeteuk ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: T.text, lineHeight: 1.45, fontFamily: FONT }}>{latestSeteuk.selectedTopic}</div>
-              <p style={{ margin: 0, fontSize: 13, color: T.textMuted, lineHeight: 1.7, fontFamily: FONT }}>{latestSeteuk.oneLineFeedback}</p>
+              <div style={{ fontSize: 16, fontWeight: 850, color: T.text, lineHeight: 1.45, fontFamily: FONT }}>{stripPresentationMarkdown(latestSeteuk.selectedTopic)}</div>
+              <PresentationText value={latestSeteuk.oneLineFeedback} fontSize={14.5} color={T.textMuted} lineHeight={1.7} />
               <div style={{ padding: '10px 12px', borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}`, fontSize: 12.5, color: T.textMuted, lineHeight: 1.65, fontFamily: FONT }}>
-                {latestSeteuk.selectedFollowUp || '후속 활동이 저장되지 않았습니다.'}
+                <PresentationText value={latestSeteuk.selectedFollowUp || '후속 활동이 저장되지 않았습니다.'} fontSize={14} color={T.textMuted} lineHeight={1.65} />
               </div>
             </div>
           ) : (
-            <p style={{ margin: 0, fontSize: 14, color: T.textSubtle, lineHeight: 1.7, fontFamily: FONT }}>세특 도우미에서 최종 결과를 생성하면 이곳에 활동안이 표시됩니다.</p>
+            <PresentationText value="세특 도우미에서 최종 결과를 생성하면 이곳에 활동안이 표시됩니다." fontSize={15} color={T.textSubtle} lineHeight={1.7} />
           )}
         </Section>
       </div>
@@ -466,7 +453,7 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
           {checklist.map((item, index) => (
             <div key={`${index}-${item}`} style={{ display: 'grid', gridTemplateColumns: '28px 1fr', gap: 10, alignItems: 'start', padding: '12px 14px', borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
               <div style={{ width: 24, height: 24, borderRadius: 999, background: T.primarySoft, color: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, fontFamily: FONT }}>{index + 1}</div>
-              <div style={{ fontSize: 13, color: T.text, lineHeight: 1.55, fontWeight: 700, fontFamily: FONT }}>{item}</div>
+              <div style={{ fontSize: 14, color: T.text, lineHeight: 1.6, fontWeight: 750, fontFamily: FONT }}>{stripPresentationMarkdown(item)}</div>
             </div>
           ))}
         </div>
@@ -478,17 +465,17 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
 function SubjectBlock({ label, subjects, fallback }: { label: string; subjects: string[]; fallback: string }) {
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 800, color: T.textSubtle, marginBottom: 6, fontFamily: FONT }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 850, color: T.textSubtle, marginBottom: 7, fontFamily: FONT }}>{label}</div>
       {subjects.length > 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {subjects.slice(0, 8).map((subject) => (
-            <span key={subject} style={{ padding: '5px 8px', borderRadius: 999, background: T.primarySoft, color: T.primary, border: `1px solid ${T.primaryBorder}`, fontSize: 12, fontWeight: 800, fontFamily: FONT }}>
+            <span key={subject} style={{ padding: '6px 9px', borderRadius: 999, background: T.primarySoft, color: T.primary, border: `1px solid ${T.primaryBorder}`, fontSize: 13, fontWeight: 850, fontFamily: FONT }}>
               {subject}
             </span>
           ))}
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: T.textSubtle, lineHeight: 1.6, fontFamily: FONT }}>{fallback}</div>
+        <div style={{ fontSize: 14, color: T.textSubtle, lineHeight: 1.65, fontFamily: FONT }}>{fallback}</div>
       )}
     </div>
   );
