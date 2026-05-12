@@ -1,12 +1,11 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
-import { SegibuAnalysis, GradeMatrix, CategoryGrades } from '@/types/analysis';
+import { GradeMatrix, CategoryGrades } from '@/types/analysis';
 import { StudentReportView, openSegibuReportPrintWindow } from '@/components/services/StudentReportView';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend,
 } from 'recharts';
@@ -33,19 +32,6 @@ const COMP_COLOR = {
   community: '#059669',
 } as const;
 
-const COMP_LABELS: Record<keyof SegibuAnalysis['scores'], string> = {
-  academic: '학업역량',
-  career: '진로역량',
-  community: '공동체역량',
-};
-
-const SERVICE_LABELS: Record<NonNullable<SegibuAnalysis['admissionsReadiness']>['nextActions'][number]['linkedService'], string> = {
-  university: '대학 찾기',
-  subject: '과목 설계',
-  seteuk: '세특 설계',
-  report: '상담 리포트',
-};
-
 // ── 분석 단계 라벨 ────────────────────────────────────────────────────────────
 const STAGES = [
   { until: 25, label: '생기부 내용을 읽는 중...' },
@@ -54,16 +40,6 @@ const STAGES = [
   { until: 92, label: '심층 리포트 생성 중...' },
   { until: 100, label: '거의 다 됐어요!' },
 ];
-
-// ── 유틸 ──────────────────────────────────────────────────────────────────────
-// AI가 문자열 대신 객체를 반환할 경우 안전하게 문자열로 변환
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toStr(v: any): string {
-  if (typeof v === 'string') return v;
-  if (v == null) return '';
-  if (typeof v === 'object') return Object.values(v).filter(Boolean).join(' / ');
-  return String(v);
-}
 
 function fmtGrade(v: number | null) {
   return v == null ? '-' : v.toFixed(2);
@@ -166,25 +142,6 @@ function GradeLineChart({ grades }: { grades: GradeMatrix }) {
             dot={{ r: 3 }} connectNulls />
         ))}
       </LineChart>
-    </ResponsiveContainer>
-  );
-}
-
-// ── 역량 레이더 ───────────────────────────────────────────────────────────────
-function CompRadar({ scores }: { scores: SegibuAnalysis['scores'] }) {
-  const data = [
-    { subject: '학업역량', value: scores.academic, fullMark: 100 },
-    { subject: '진로역량', value: scores.career, fullMark: 100 },
-    { subject: '공동체역량', value: scores.community, fullMark: 100 },
-  ];
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <RadarChart data={data}>
-        <PolarGrid stroke={T.border} />
-        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 13, fill: T.text, fontFamily: FONT, fontWeight: 600 }} />
-        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        <Radar dataKey="value" stroke={T.primary} fill={T.primary} fillOpacity={0.18} strokeWidth={2} />
-      </RadarChart>
     </ResponsiveContainer>
   );
 }
@@ -811,12 +768,18 @@ function HighlightCard({ highlight }: { highlight: { academic: string; career: s
   ] as const;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {items.map(({ key, label, color }) => highlight[key] && highlight[key] !== '관련 내용 없음' && (
-        <div key={key} style={{ padding: '10px 14px', borderRadius: 8, background: T.bgAlt, borderLeft: `3px solid ${color}` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 4, letterSpacing: '0.04em' }}>{label}</div>
-          <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>{highlight[key]}</div>
-        </div>
-      ))}
+      {items.map(({ key, label, color }) => {
+        const text = highlight[key]?.trim();
+        const missing = !text || text === '관련 내용 없음';
+        return (
+          <div key={key} style={{ padding: '10px 14px', borderRadius: 8, background: missing ? T.surfaceAlt : T.bgAlt, borderLeft: `3px solid ${color}`, opacity: missing ? 0.78 : 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: missing ? T.textSubtle : color, marginBottom: 4, letterSpacing: '0.04em' }}>{label}</div>
+            <div style={{ fontSize: 14, color: missing ? T.textSubtle : T.textMuted, lineHeight: 1.6, fontFamily: FONT }}>
+              {missing ? '해당 영역에서는 뚜렷한 근거가 부족합니다.' : text}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -835,39 +798,6 @@ function PrivacyLockedRecord({ label = '원본 기록' }: { label?: string }) {
         <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>개인정보 보호 잠금</div>
         <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.5 }}>생기부 원문과 원문 인용은 저장·출력하지 않습니다. 상담에는 오른쪽 역량 하이라이트와 처방 요약을 사용하세요.</div>
       </div>
-    </div>
-  );
-}
-
-function ReadinessSummary({ readiness }: { readiness: NonNullable<SegibuAnalysis['admissionsReadiness']> }) {
-  return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, gridColumn: '1 / -1' }}>
-      <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 8 }}>상담 처방 요약</div>
-      <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>{readiness.overall}</div>
-
-      {readiness.criticalWeaknesses.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 14 }}>
-          {readiness.criticalWeaknesses.slice(0, 3).map((item, index) => (
-            <div key={`${item.competency}-${index}`} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', background: T.surfaceAlt, borderLeft: `3px solid ${COMP_COLOR[item.competency]}` }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: COMP_COLOR[item.competency], marginBottom: 5 }}>{COMP_LABELS[item.competency]} 보완</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.45, marginBottom: 5 }}>{item.issue}</div>
-              <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55 }}>{item.recommendation}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {readiness.nextActions.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {readiness.nextActions.slice(0, 4).map(action => (
-            <div key={`${action.priority}-${action.action}`} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', borderRadius: 9, background: T.bgAlt, border: `1px solid ${T.border}` }}>
-              <span style={{ width: 22, height: 22, borderRadius: 999, background: T.primary, color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{action.priority}</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: T.primary }}>{SERVICE_LABELS[action.linkedService]}</span>
-              <span style={{ fontSize: 13, color: T.textMuted }}>{action.action}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1272,7 +1202,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export function Service3Segibu() {
   const { segibuAnalysis, analyzeSegibu, clearSegibuAnalysis, analysisLoading, analysisError, currentStudent } = useStudent();
-  const [tab, setTab] = useState<'summary' | 'report' | 'grades' | 'activities'>('summary');
+  const [tab, setTab] = useState<'summary' | 'grades' | 'activities'>('summary');
   const [activityCategory, setActivityCategory] = useState<'individual' | 'club' | 'career_act'>('individual');
   const [curriculumKey, setCurriculumKey] = useState<'korean' | 'math' | 'english' | 'social' | 'science' | 'liberal' | 'arts_phys'>('korean');
   const [activityYearTab, setActivityYearTab] = useState<'y1' | 'y2' | 'y3'>('y1');
@@ -1296,7 +1226,6 @@ export function Service3Segibu() {
   if (!segibuAnalysis) return <UploadScreen currentStudentName={currentStudent?.name} onAnalyze={handleAnalyze} error={analysisError} />;
 
   const r = segibuAnalysis;
-  const readiness = r.admissionsReadiness;
   const resolvedStudentName = r.studentName ?? currentStudent?.name ?? '학생';
   const openPrintDocument = () => openSegibuReportPrintWindow(r, resolvedStudentName);
 
@@ -1326,7 +1255,7 @@ export function Service3Segibu() {
 
       {/* 탭 */}
       <div style={{ display: 'flex', borderBottom: `2px solid ${T.border}`, gap: 0 }}>
-        {([['summary', '통합 리포트'], ['report', 'AI 분석 원문'], ['grades', '성적 분석'], ['activities', '학생부 심층분석']] as const).map(([k, l]) => (
+        {([['summary', '통합 리포트'], ['grades', '성적 분석'], ['activities', '학생부 심층분석']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             padding: '10px 20px', fontSize: 15, fontWeight: tab === k ? 700 : 500,
             color: tab === k ? T.primary : T.textMuted,
@@ -1344,32 +1273,6 @@ export function Service3Segibu() {
           studentName={currentStudent?.name}
           embedded
         />
-      )}
-
-      {tab === 'report' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-          {readiness && <ReadinessSummary readiness={readiness} />}
-
-          <div style={{ gridColumn: '1 / -1' }}>
-            <PrivacyLockedRecord label="AI 분석 원문" />
-          </div>
-          {/* 레이더 + 향후 전략 */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 12 }}>3대 역량 레이더</div>
-            <CompRadar scores={r.scores} />
-          </div>
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 12 }}>향후 전략 제언</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 6 }}>심화 탐구 제안</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 14 }}>
-              {toStr(r.futureStrategy.deepDive)}
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.warning, marginBottom: 6 }}>연계 과목</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7 }}>
-              {toStr(r.futureStrategy.subjects)}
-            </div>
-          </div>
-        </div>
       )}
 
       {tab === 'grades' && (

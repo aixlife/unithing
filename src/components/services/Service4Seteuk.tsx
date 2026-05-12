@@ -189,7 +189,7 @@ function buildSeteukPrintHtml({
   <meta charset="utf-8" />
   <title>교과세특 최종 계획서와 세특 초안</title>
   <style>
-    @page { size: A4; margin: 0; }
+    @page { size: A4; margin: 14mm; }
     :root {
       --text: #191F28;
       --muted: #4E5968;
@@ -230,7 +230,7 @@ function buildSeteukPrintHtml({
     @media print {
       body { background: #fff; }
       .toolbar { display: none; }
-      .sheet { width: 210mm; min-height: 297mm; margin: 0; padding: 14mm; box-shadow: none; }
+      .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
       table { overflow: visible; }
     }
   </style>

@@ -115,7 +115,7 @@ function buildRoadmapPrintHtml(snapshot: RoadmapSnapshot, statuses: RoadmapStatu
   <meta charset="utf-8" />
   <title>${escapeHtml(snapshot.studentName)} 진학 설계 로드맵</title>
   <style>
-    @page { size: A4; margin: 0; }
+    @page { size: A4; margin: 14mm; }
     :root {
       --text: #191F28;
       --muted: #4E5968;
@@ -156,7 +156,7 @@ function buildRoadmapPrintHtml(snapshot: RoadmapSnapshot, statuses: RoadmapStatu
     @media print {
       body { background: #fff; }
       .toolbar { display: none; }
-      .sheet { width: 210mm; min-height: 297mm; margin: 0; padding: 14mm; box-shadow: none; }
+      .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
     }
   </style>
 </head>

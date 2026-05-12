@@ -129,6 +129,11 @@ a { color: inherit; text-decoration: none; }
   .ut-mobile-only { display: none !important; }
 }
 
+@page {
+  size: A4;
+  margin: 14mm;
+}
+
 @media print {
   button,
   .no-print {

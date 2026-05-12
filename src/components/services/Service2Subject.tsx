@@ -349,7 +349,7 @@ export function Service2Subject() {
   <meta charset="utf-8" />
   <title>${planGrade}학년 선택 과목 가이드</title>
   <style>
-    @page { size: A4; margin: 0; }
+    @page { size: A4; margin: 14mm; }
     :root {
       --text: #191F28;
       --muted: #4E5968;
@@ -394,7 +394,7 @@ export function Service2Subject() {
     @media print {
       body { background: #fff; }
       .toolbar { display: none; }
-      .sheet { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .sheet { width: auto; min-height: auto; margin: 0; box-shadow: none; }
     }
   </style>
 </head>

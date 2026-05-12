@@ -114,11 +114,14 @@ function CompRadar({ scores, height = 240 }: { scores: SegibuAnalysis['scores'];
 }
 
 function HighlightPill({ label, text, color, soft }: { label: string; text: string; color: string; soft: string }) {
-  if (!text) return null;
+  const displayText = text?.trim();
+  const missing = !displayText || displayText === '관련 내용 없음';
   return (
-    <div style={{ padding: '8px 12px', borderRadius: 8, background: soft, borderLeft: `3px solid ${color}`, marginBottom: 6 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: '0.04em', display: 'block', marginBottom: 2, fontFamily: FONT }}>{label}</span>
-      <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>{text}</p>
+    <div style={{ padding: '8px 12px', borderRadius: 8, background: missing ? T.surfaceAlt : soft, borderLeft: `3px solid ${color}`, marginBottom: 6, opacity: missing ? 0.78 : 1 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: missing ? T.textSubtle : color, letterSpacing: '0.04em', display: 'block', marginBottom: 2, fontFamily: FONT }}>{label}</span>
+      <p style={{ fontSize: 13, color: missing ? T.textSubtle : T.textMuted, lineHeight: 1.6, margin: 0, fontFamily: FONT }}>
+        {missing ? '해당 영역에서는 뚜렷한 근거가 부족합니다.' : displayText}
+      </p>
     </div>
   );
 }
@@ -273,7 +276,7 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
   <meta charset="utf-8" />
   <title>${escapeHtml(studentName)} 학생부 리포트</title>
   <style>
-    @page { size: A4; margin: 0; }
+    @page { size: A4; margin: 14mm; }
     :root {
       --text: #191F28;
       --muted: #4E5968;
@@ -319,7 +322,7 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
     @media print {
       body { background: #fff; }
       .toolbar { display: none; }
-      .sheet { width: 210mm; min-height: 297mm; margin: 0; padding: 14mm; box-shadow: none; }
+      .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
     }
   </style>
 </head>
@@ -386,14 +389,12 @@ function YearTabView({
       </div>
 
       <PrivacyLockedPanel />
-      {(h.academic || h.career || h.community) && (
-        <div>
-          <p style={{ fontSize: 11, fontWeight: 700, color: T.textSubtle, letterSpacing: '0.06em', margin: '0 0 6px', fontFamily: FONT }}>역량 하이라이트</p>
-          <HighlightPill label="학업역량" text={h.academic} color={T.comp.academic.color} soft={T.comp.academic.soft} />
-          <HighlightPill label="진로역량" text={h.career}   color={T.comp.career.color}   soft={T.comp.career.soft} />
-          <HighlightPill label="공동체역량" text={h.community} color={T.comp.community.color} soft={T.comp.community.soft} />
-        </div>
-      )}
+      <div>
+        <p style={{ fontSize: 11, fontWeight: 700, color: T.textSubtle, letterSpacing: '0.06em', margin: '0 0 6px', fontFamily: FONT }}>역량 하이라이트</p>
+        <HighlightPill label="학업역량" text={h.academic} color={T.comp.academic.color} soft={T.comp.academic.soft} />
+        <HighlightPill label="진로역량" text={h.career}   color={T.comp.career.color}   soft={T.comp.career.soft} />
+        <HighlightPill label="공동체역량" text={h.community} color={T.comp.community.color} soft={T.comp.community.soft} />
+      </div>
     </div>
   );
 }
