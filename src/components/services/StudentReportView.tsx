@@ -286,11 +286,54 @@ function escapeHtml(value: string) {
 }
 
 function formatHtmlBlock(value: string) {
-  const safe = escapeHtml(value || '-')
+  const safe = escapeHtml((value || '-').replace(/^#{1,6}\s+/gm, ''))
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n{2,}/g, '</p><p>')
     .replace(/\n/g, '<br />');
   return `<p>${safe}</p>`;
+}
+
+function radarSvgHtml(scores: SegibuAnalysis['scores']) {
+  const size = 300;
+  const center = 150;
+  const radius = 94;
+  const axes: { key: keyof SegibuAnalysis['scores']; label: string; angle: number; color: string }[] = [
+    { key: 'academic', label: '학업 역량', angle: -90, color: T.comp.academic.color },
+    { key: 'career', label: '진로 역량', angle: 30, color: T.comp.career.color },
+    { key: 'community', label: '공동체 역량', angle: 150, color: T.comp.community.color },
+  ];
+  const point = (angle: number, ratio: number) => {
+    const rad = (Math.PI / 180) * angle;
+    return {
+      x: center + Math.cos(rad) * radius * ratio,
+      y: center + Math.sin(rad) * radius * ratio,
+    };
+  };
+  const polygon = (ratio: number) => axes.map(axis => {
+    const p = point(axis.angle, ratio);
+    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  }).join(' ');
+  const scorePoints = axes.map(axis => {
+    const p = point(axis.angle, scores[axis.key] / 100);
+    return { ...p, ...axis, score: scores[axis.key] };
+  });
+  const scorePolygon = scorePoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+  return `
+    <svg class="radar-svg" viewBox="0 0 ${size} ${size}" role="img" aria-label="3대 역량 레이더">
+      ${[0.25, 0.5, 0.75, 1].map(ratio => `<polygon points="${polygon(ratio)}" fill="none" stroke="#DDE3EA" stroke-width="1" />`).join('')}
+      ${axes.map(axis => {
+        const p = point(axis.angle, 1);
+        return `<line x1="${center}" y1="${center}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="#E5E8EB" stroke-width="1" />`;
+      }).join('')}
+      <polygon points="${scorePolygon}" fill="${T.primary}" fill-opacity="0.20" stroke="${T.primary}" stroke-width="3" />
+      ${scorePoints.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="${p.color}" />`).join('')}
+      <text x="150" y="28" text-anchor="middle" font-size="14" font-weight="900" fill="${T.text}">학업 역량 ${scores.academic}</text>
+      <text x="266" y="206" text-anchor="middle" font-size="14" font-weight="900" fill="${T.text}">진로 역량 ${scores.career}</text>
+      <text x="34" y="206" text-anchor="middle" font-size="14" font-weight="900" fill="${T.text}">공동체</text>
+      <text x="34" y="223" text-anchor="middle" font-size="14" font-weight="900" fill="${T.text}">역량 ${scores.community}</text>
+    </svg>
+  `;
 }
 
 function scoreCardHtml(label: string, score: number, color: string) {
@@ -334,6 +377,7 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
     scoreCardHtml('진로역량', r.scores.career, T.comp.career.color),
     scoreCardHtml('공동체역량', r.scores.community, T.comp.community.color),
   ].join('');
+  const radarHtml = radarSvgHtml(r.scores);
   const highlights = (['academic', 'career', 'community'] as const).map((key) => `
     <div class="highlight" style="border-top-color: ${T.comp[key].color}">
       <h3 style="color: ${T.comp[key].color}">${escapeHtml(T.comp[key].label)}</h3>
@@ -368,7 +412,12 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
     .eyebrow { color: var(--primary); font-size: 11px; font-weight: 900; margin-bottom: 5px; }
     h1 { margin: 0; font-size: 23px; line-height: 1.25; letter-spacing: 0; }
     .meta { margin-top: 8px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+    .print-radar-section { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 12px; align-items: stretch; }
+    .radar-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+    .radar-title { font-size: 12px; font-weight: 900; color: var(--text); margin-bottom: 2px; }
+    .radar-svg { width: 100%; height: 66mm; display: block; }
     .score-grid, .highlight-grid, .weakness-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .print-radar-section .score-grid { grid-template-columns: 1fr; }
     .score-card, .highlight, .weakness, .strategy-card { border: 1px solid var(--line); border-top: 3px solid var(--primary); border-radius: 8px; padding: 10px 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
     .score-label, .chip { font-size: 11px; font-weight: 900; color: var(--muted); margin-bottom: 4px; }
     .score-row { display: flex; align-items: baseline; gap: 4px; }
@@ -411,7 +460,13 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
       <h1>${escapeHtml(studentName)} 학생 학생부 리포트</h1>
       ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ''}
     </header>
-    <section class="score-grid avoid">${scoreCards}</section>
+    <section class="print-radar-section avoid">
+      <div class="radar-card">
+        <div class="radar-title">3대 역량 레이더</div>
+        ${radarHtml}
+      </div>
+      <div class="score-grid">${scoreCards}</div>
+    </section>
     ${readinessHtml(readiness)}
     <section class="section">
       <h2>3대 역량 핵심 요약</h2>
