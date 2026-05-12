@@ -1,7 +1,5 @@
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { jsPDF } from 'jspdf';
-import { toJpeg } from 'html-to-image';
 import { useStudent } from '@/contexts/StudentContext';
 import {
   getNaesinData,
@@ -128,10 +126,6 @@ function getTargetLabel(targetPick: UniversityTargetPick | null, fallbackDept: s
   return [targetPick?.name, dept].filter(Boolean).join(' ');
 }
 
-function safeFilename(value: string) {
-  return value.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || '세특_최종결과';
-}
-
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -148,6 +142,18 @@ function renderPlanContent(item: PlanItem) {
       .join('');
   }
   return escapeHtml(item.content ?? '').replace(/\n/g, '<br />');
+}
+
+function renderDraftParagraphs(draft: string) {
+  const paragraphs = draft
+    .split(/\n{2,}/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const safeParagraphs = paragraphs.length > 0 ? paragraphs : ['세특 초안이 없습니다.'];
+  return safeParagraphs
+    .map((paragraph) => `<p class="draft">${escapeHtml(paragraph).replace(/\n/g, '<br />')}</p>`)
+    .join('');
 }
 
 function buildSeteukPrintHtml({
@@ -167,6 +173,9 @@ function buildSeteukPrintHtml({
       <td>${renderPlanContent(item)}</td>
     </tr>
   `).join('') || '<tr><td colspan="2" class="empty">계획서 데이터 없음</td></tr>';
+  const metaItems = [major && `희망 학과: ${major}`, topic && `탐구 주제: ${topic}`]
+    .filter(Boolean)
+    .map(String);
 
   return `<!doctype html>
 <html lang="ko">
@@ -174,33 +183,76 @@ function buildSeteukPrintHtml({
   <meta charset="utf-8" />
   <title>교과세특 최종 계획서와 세특 초안</title>
   <style>
-    @page { size: A4; margin: 14mm; }
-    body { margin: 0; color: #191F28; font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    .header { border-bottom: 2px solid #191F28; padding-bottom: 12px; margin-bottom: 18px; }
-    .eyebrow { font-size: 12px; font-weight: 800; color: #4F46E5; margin-bottom: 6px; }
-    h1 { font-size: 22px; margin: 0; }
-    .meta { margin-top: 8px; color: #4E5968; font-size: 13px; }
-    h2 { font-size: 17px; margin: 22px 0 10px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { border: 1px solid #D1D6DB; padding: 10px 12px; vertical-align: top; line-height: 1.65; }
-    th { width: 26%; background: #EEF2FF; color: #3730A3; text-align: left; }
-    .draft { border: 1px solid #BBF7D0; background: #F0FDF4; border-radius: 8px; padding: 14px 16px; line-height: 1.85; white-space: pre-wrap; font-size: 14px; }
-    .step { margin-bottom: 9px; }
-    .step strong { display: block; margin-bottom: 3px; }
-    .step span { display: block; color: #4E5968; }
-    .empty { text-align: center; color: #8B95A1; }
+    @page { size: A4; margin: 0; }
+    :root {
+      --text: #191F28;
+      --muted: #4E5968;
+      --subtle: #8B95A1;
+      --border: #D1D6DB;
+      --line: #E5E8EB;
+      --indigo: #4F46E5;
+      --indigo-soft: #EEF2FF;
+      --green: #059669;
+      --green-soft: #F0FDF4;
+      --green-line: #BBF7D0;
+      --bg: #F4F6F8;
+    }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.65; }
+    .toolbar { max-width: 210mm; margin: 24px auto 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+    .toolbar button { height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text); font-weight: 800; cursor: pointer; }
+    .sheet { width: 210mm; min-height: 297mm; margin: 0 auto 28px; padding: 14mm; background: #fff; box-shadow: 0 16px 42px rgba(25, 31, 40, 0.12); }
+    .header { border-bottom: 2px solid var(--text); padding-bottom: 13px; margin-bottom: 18px; break-inside: avoid; page-break-inside: avoid; }
+    .eyebrow { font-size: 11px; font-weight: 900; color: var(--indigo); letter-spacing: 0; margin-bottom: 5px; }
+    h1 { font-size: 22px; line-height: 1.28; margin: 0; letter-spacing: 0; }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+    .meta span { padding: 2px 8px; border-radius: 999px; background: #F8FAFC; border: 1px solid var(--line); }
+    .section-title { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin: 22px 0 9px; padding-bottom: 7px; border-bottom: 2px solid var(--indigo); break-after: avoid; page-break-after: avoid; }
+    .section-title.green { border-bottom-color: var(--green); }
+    .section-title h2 { font-size: 17px; line-height: 1.35; margin: 0; letter-spacing: 0; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 13px; background: #fff; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    tr + tr th, tr + tr td { border-top: 1px solid var(--line); }
+    th, td { padding: 10px 12px; vertical-align: top; line-height: 1.65; }
+    th { width: 31mm; background: var(--indigo-soft); color: #3730A3; text-align: left; font-size: 12.5px; font-weight: 900; border-right: 1px solid var(--border); white-space: pre-line; }
+    .step { display: grid; grid-template-columns: 18mm minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px dashed var(--line); break-inside: avoid; page-break-inside: avoid; }
+    .step:first-child { padding-top: 0; border-top: 0; }
+    .step strong { align-self: start; border-radius: 5px; background: var(--indigo); color: #fff; font-size: 10.5px; font-weight: 900; text-align: center; padding: 3px 4px; line-height: 1.35; }
+    .step span { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+    .empty { text-align: center; color: var(--subtle); }
+    .draft { margin: 0 0 8px; border: 1px solid var(--green-line); background: var(--green-soft); border-radius: 8px; padding: 10px 12px; line-height: 1.82; white-space: pre-wrap; font-size: 13.5px; break-inside: avoid; page-break-inside: avoid; }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .sheet { width: 210mm; min-height: 297mm; margin: 0; padding: 14mm; box-shadow: none; }
+      table { overflow: visible; }
+    }
   </style>
 </head>
 <body>
-  <section class="header">
+  <div class="toolbar">
+    <div>교과세특 최종 계획서와 세특 초안</div>
+    <button onclick="window.print()">인쇄 / PDF 저장</button>
+  </div>
+  <main class="sheet">
+    <section class="header">
     <div class="eyebrow">교과세특 최종 결과</div>
     <h1>교과세특 최종 계획서와 세특 초안</h1>
-    <div class="meta">${[major, topic].filter(Boolean).map(escapeHtml).join(' · ')}</div>
-  </section>
-  <h2>탐구 계획서</h2>
-  <table><tbody>${rows}</tbody></table>
-  <h2>세특 초안</h2>
-  <div class="draft">${escapeHtml(draft || '세특 초안이 없습니다.')}</div>
+    ${metaItems.length > 0 ? `<div class="meta">${metaItems.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}</div>` : ''}
+    </section>
+    <section>
+      <div class="section-title">
+        <h2>탐구 계획서</h2>
+      </div>
+      <table><tbody>${rows}</tbody></table>
+    </section>
+    <section>
+      <div class="section-title green">
+        <h2>세특 초안</h2>
+      </div>
+      ${renderDraftParagraphs(draft)}
+    </section>
+  </main>
 </body>
 </html>`;
 }
@@ -881,8 +933,6 @@ function Phase6({
   selectedTopic: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
 
   if (loading) return <LoadingCard message="세특 초안과 탐구 계획서를 생성 중이에요... 30초 정도 소요됩니다." />;
 
@@ -904,34 +954,7 @@ function Phase6({
     });
   };
 
-  const handlePdf = async () => {
-    if (!exportRef.current || exporting) return;
-    setExporting(true);
-    try {
-      const image = await toJpeg(exportRef.current, {
-        quality: 0.96,
-        backgroundColor: '#FFFFFF',
-        pixelRatio: 2,
-        cacheBust: true,
-      });
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imageProps = pdf.getImageProperties(image);
-      const imageHeight = (imageProps.height * pageWidth) / imageProps.width;
-      let y = 0;
-      while (y < imageHeight) {
-        if (y > 0) pdf.addPage();
-        pdf.addImage(image, 'JPEG', 0, -y, pageWidth, imageHeight);
-        y += pageHeight;
-      }
-      pdf.save(`${safeFilename(`${major || '교과세특'}_최종계획서_세특초안`)}.pdf`);
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handlePrint = () => {
+  const openPrintDocument = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     printWindow.document.write(buildSeteukPrintHtml({ major, topic: selectedTopic, draft, plan }));
@@ -949,16 +972,16 @@ function Phase6({
           <p style={{ fontSize: 15, color: T.textMuted, margin: '4px 0 0', fontFamily: FONT }}>완성된 세특 초안과 탐구 계획서입니다.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button onClick={handlePrint} style={{ padding: '8px 13px', borderRadius: 8, border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
+          <button onClick={openPrintDocument} style={{ padding: '8px 13px', borderRadius: 8, border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
             인쇄
           </button>
-          <button onClick={handlePdf} disabled={exporting} style={{ padding: '8px 13px', borderRadius: 8, border: 'none', background: exporting ? T.bgAlt : T.indigo, color: exporting ? T.textSubtle : '#fff', fontSize: 13, fontWeight: 800, cursor: exporting ? 'not-allowed' : 'pointer', fontFamily: FONT }}>
-            {exporting ? 'PDF 생성 중...' : 'PDF 저장'}
+          <button onClick={openPrintDocument} style={{ padding: '8px 13px', borderRadius: 8, border: 'none', background: T.indigo, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
+            PDF 저장
           </button>
         </div>
       </div>
 
-      <div ref={exportRef} style={{ background: T.surface, padding: 2 }}>
+      <div style={{ background: T.surface, padding: 2 }}>
         {/* Research Plan */}
         <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: `2px solid ${T.indigo}`, paddingBottom: 10, marginBottom: 16 }}>
