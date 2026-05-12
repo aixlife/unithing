@@ -247,7 +247,7 @@ function readinessHtml(readiness: SegibuAnalysis['admissionsReadiness']) {
   return `
     <section class="section avoid">
       <h2>상담 처방 요약</h2>
-      ${formatHtmlBlock(readiness.overall)}
+      <div class="readiness-overall">${formatHtmlBlock(readiness.overall)}</div>
       ${weaknesses ? `<div class="weakness-grid">${weaknesses}</div>` : ''}
       ${actions ? `<ol class="actions">${actions}</ol>` : ''}
     </section>
@@ -313,6 +313,8 @@ function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keyw
     strong { color: var(--text); }
     .keywords { display: flex; flex-wrap: wrap; gap: 6px; }
     .keywords span { padding: 4px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 800; }
+    .readiness-overall { margin-bottom: 14px; }
+    .weakness-grid { margin-top: 14px; }
     .actions { margin: 10px 0 0; padding-left: 0; color: var(--text); font-size: 12.7px; list-style: none; }
     .actions li { display: grid; grid-template-columns: 24px 1fr; gap: 8px; margin-bottom: 7px; break-inside: avoid; page-break-inside: avoid; }
     .action-no { width: 22px; height: 22px; border-radius: 999px; background: var(--primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; }
