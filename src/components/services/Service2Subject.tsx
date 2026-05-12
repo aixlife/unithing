@@ -259,12 +259,38 @@ export function Service2Subject() {
     setSelectedMajor(major);
     setViewMode('subject');
     setActiveAreaTab(null);
+    setSelectedSubjectName(null);
+    setSubjectMatches([]);
+    setSubjectPlan(null);
+    setSubjectPlanError(null);
     if (!selectedField) {
       const field = FIELD_DATA.find(f => f.majors.some(m => m.name === major.name));
       if (field) setSelectedField(field);
     }
   };
-  const resetSelection = () => { setSelectedField(null); setSelectedMajor(null); setSearchTerm(''); };
+  const resetSelection = () => {
+    setSelectedMajor(null);
+    setViewMode('subject');
+    setActiveAreaTab(null);
+    setSelectedSubjectName(null);
+    setSubjectPlan(null);
+    setSubjectPlanError(null);
+  };
+  const resetMajorExplorer = () => {
+    setSelectedField(null);
+    setSelectedMajor(null);
+    setSearchTerm('');
+    setSelectedSubjectName(null);
+    setSubjectPlan(null);
+    setSubjectPlanError(null);
+  };
+  const searchStoredTarget = () => {
+    const target = studentTargetDept || studentTargetPick?.dept || '';
+    if (!target) return;
+    setSelectedField(null);
+    setSelectedMajor(null);
+    setSearchTerm(target);
+  };
 
   const planData = useMemo(() => {
     if (!selectedMajor) return [];
@@ -581,6 +607,56 @@ export function Service2Subject() {
       {/* ===== STEP 1: Major Selection ===== */}
       {!selectedMajor && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{
+            background: T.surface,
+            border: `1px solid ${T.border}`,
+            borderRadius: 14,
+            padding: '18px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 14,
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ minWidth: 240 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ color: T.primary, display: 'flex' }}><IconBook /></span>
+                <h2 style={{ fontSize: 'clamp(18px, 2.1vw, 24px)', fontWeight: 850, color: T.text, margin: 0, lineHeight: 1.2 }}>선택 과목 가이드</h2>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {(studentTargetPick?.name || studentTargetDept) ? (
+                  <>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: T.primary, background: T.primarySoft, border: `1px solid ${T.primaryBorder}`, borderRadius: 999, padding: '3px 9px' }}>
+                      저장 목표
+                    </span>
+                    <span style={{ fontSize: 13, color: T.textMuted }}>
+                      {[studentTargetPick?.name, studentTargetDept || studentTargetPick?.dept].filter(Boolean).join(' · ')}
+                    </span>
+                    <span style={{ fontSize: 12, color: T.textSubtle }}>미선택</span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 13, color: T.textSubtle }}>전공 기준 미설정</span>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {(studentTargetDept || studentTargetPick?.dept) && (
+                <button
+                  onClick={searchStoredTarget}
+                  style={{ height: 36, padding: '0 13px', borderRadius: 9, border: `1px solid ${T.primaryBorder}`, background: T.primarySoft, color: T.primary, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}
+                >
+                  목표 학과 검색
+                </button>
+              )}
+              <button
+                onClick={() => setShowCustomForm(true)}
+                style={{ height: 36, padding: '0 13px', borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}
+              >
+                편제표 설정
+              </button>
+            </div>
+          </div>
+
           {/* Search bar */}
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: T.textSubtle, display: 'flex' }}>
@@ -656,7 +732,7 @@ export function Service2Subject() {
               {/* Field filter pills */}
               <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
                 <button
-                  onClick={() => setSelectedField(null)}
+                  onClick={resetMajorExplorer}
                   style={{
                     whiteSpace: 'nowrap',
                     padding: '8px 16px',
@@ -758,110 +834,111 @@ export function Service2Subject() {
       {/* ===== STEP 2: Subject Recommendation ===== */}
       {selectedMajor && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Top bar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <button
-              onClick={resetSelection}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 14px',
-                background: T.surface,
-                border: `1px solid ${T.border}`,
-                borderRadius: 10,
-                fontSize: 13,
-                fontWeight: 600,
-                color: T.textMuted,
-                cursor: 'pointer',
-                fontFamily: FONT,
-                transition: 'border-color 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.borderStrong; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; }}
-            >
-              <IconArrowLeft />
-              돌아가기
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h2 style={{ fontSize: 'clamp(15px, 2vw, 18px)', fontWeight: 800, color: T.text, margin: 0 }}>
-                {selectedMajor.name} 선택 과목 가이드
-              </h2>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              {/* View toggle */}
-              <div style={{ display: 'flex', background: T.bgAlt, borderRadius: 10, padding: 3, gap: 2 }}>
-                {([
-                  { key: 'subject' as const, icon: <IconLayers />, label: '교과별' },
-                  { key: 'group' as const, icon: <IconGrid />, label: '선택군별' },
-                  { key: 'plan' as const, icon: <IconCalendar />, label: '계획서' },
-                ] as const).map(v => (
-                  <button
-                    key={v.key}
-                    onClick={() => setViewMode(v.key)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '7px 12px',
-                      borderRadius: 7,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      border: 'none',
-                      fontFamily: FONT,
-                      background: viewMode === v.key ? T.surface : 'transparent',
-                      color: viewMode === v.key ? T.primary : T.textMuted,
-                      boxShadow: viewMode === v.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {v.icon}{v.label}
-                  </button>
-                ))}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 260 }}>
+                <button
+                  onClick={resetSelection}
+                  aria-label="학과 다시 선택"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 36, height: 36,
+                    background: T.bgAlt,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 10,
+                    color: T.textMuted,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.borderStrong; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; }}
+                >
+                  <IconArrowLeft />
+                </button>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 850, color: T.primary, marginBottom: 3 }}>선택 과목 가이드</div>
+                  <h2 style={{ fontSize: 'clamp(18px, 2.2vw, 24px)', fontWeight: 850, color: T.text, margin: 0, lineHeight: 1.2 }}>
+                    {selectedMajor.name}
+                  </h2>
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 8 }}>
+                    <span style={{ fontSize: 12, color: T.textSubtle, background: T.bgAlt, borderRadius: 999, padding: '3px 8px' }}>{selectedMajor.recommendedSubjects.length}개 추천 과목</span>
+                    <span style={{ fontSize: 12, color: T.textSubtle, background: T.bgAlt, borderRadius: 999, padding: '3px 8px' }}>{isCustomMode ? '내 편제표 기준' : '기본 편제표 기준'}</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Custom curriculum button */}
-              <button
-                onClick={() => setShowCustomForm(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 14px',
-                  background: isCustomMode ? T.accent : T.surface,
-                  color: isCustomMode ? '#fff' : T.textMuted,
-                  border: `1px solid ${isCustomMode ? T.accent : T.border}`,
-                  borderRadius: 10,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: FONT,
-                  transition: 'all 0.15s',
-                }}
-              >
-                <IconSettings />
-                {isCustomMode ? '내 교육과정' : '편제표 업로드'}
-              </button>
-
-              {/* PDF button */}
-              {viewMode === 'plan' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
-                  onClick={openSubjectPlanDocument}
+                  onClick={() => setShowCustomForm(true)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '8px 14px',
-                    background: T.primary,
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 10,
-                    fontSize: 13,
-                    fontWeight: 700,
+                    height: 36,
+                    padding: '0 13px',
+                    background: isCustomMode ? T.accent : T.surface,
+                    color: isCustomMode ? '#fff' : T.textMuted,
+                    border: `1px solid ${isCustomMode ? T.accent : T.border}`,
+                    borderRadius: 9,
+                    fontSize: 12,
+                    fontWeight: 800,
                     cursor: 'pointer',
                     fontFamily: FONT,
-                    transition: 'background 0.15s',
                   }}
                 >
-                  <IconDownload />
-                  인쇄 / PDF 저장
+                  <IconSettings />
+                  {isCustomMode ? '내 편제표' : '편제표 설정'}
                 </button>
-              )}
+
+                {viewMode === 'plan' && (
+                  <button
+                    onClick={openSubjectPlanDocument}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      height: 36,
+                      padding: '0 13px',
+                      background: T.primary,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 9,
+                      fontSize: 13,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      fontFamily: FONT,
+                    }}
+                  >
+                    <IconDownload />
+                    인쇄 / PDF 저장
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', background: T.bgAlt, borderRadius: 10, padding: 3, gap: 2, alignSelf: 'flex-start', maxWidth: '100%', overflowX: 'auto' }}>
+              {([
+                { key: 'subject' as const, icon: <IconLayers />, label: '교과별' },
+                { key: 'group' as const, icon: <IconGrid />, label: '선택군별' },
+                { key: 'plan' as const, icon: <IconCalendar />, label: '계획서' },
+              ] as const).map(v => (
+                <button
+                  key={v.key}
+                  onClick={() => setViewMode(v.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '8px 13px',
+                    borderRadius: 7,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    border: 'none',
+                    fontFamily: FONT,
+                    background: viewMode === v.key ? T.surface : 'transparent',
+                    color: viewMode === v.key ? T.primary : T.textMuted,
+                    boxShadow: viewMode === v.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {v.icon}{v.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -1001,7 +1078,7 @@ export function Service2Subject() {
               </div>
 
               {/* Right: target university data (1/3) */}
-              <div style={{ flex: '0 0 320px', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ flex: '1 1 320px', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{
                   background: T.surface,
                   border: `1px solid ${T.border}`,
