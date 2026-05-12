@@ -1,9 +1,7 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { SegibuAnalysis } from '@/types/analysis';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 const T = {
   primary: '#1B64DA', primarySoft: '#EBF2FF', primaryBorder: '#CFDFFB',
@@ -97,19 +95,19 @@ function ScoreBar({ label, score, color, soft }: { label: string; score: number;
   );
 }
 
-function CompRadar({ scores }: { scores: SegibuAnalysis['scores'] }) {
+function CompRadar({ scores, height = 240 }: { scores: SegibuAnalysis['scores']; height?: number }) {
   const data = [
     { subject: '학업역량', value: scores.academic, fullMark: 100 },
     { subject: '진로역량', value: scores.career,   fullMark: 100 },
     { subject: '공동체역량', value: scores.community, fullMark: 100 },
   ];
   return (
-    <ResponsiveContainer width="100%" height={160}>
+    <ResponsiveContainer width="100%" height={height}>
       <RadarChart data={data} margin={{ top: 10, right: 20, left: 20, bottom: 10 }}>
         <PolarGrid stroke={T.border} />
-        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: T.textMuted, fontFamily: FONT }} />
+        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 13, fill: T.text, fontFamily: FONT, fontWeight: 800 }} />
         <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        <Radar dataKey="value" stroke={T.primary} fill={T.primary} fillOpacity={0.18} strokeWidth={2} />
+        <Radar dataKey="value" stroke={T.primary} fill={T.primary} fillOpacity={0.2} strokeWidth={2.5} />
       </RadarChart>
     </ResponsiveContainer>
   );
@@ -203,74 +201,165 @@ function PrivacyLockedPanel({ label = '원본 기록' }: { label?: string }) {
   );
 }
 
-function safeFilename(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, '_').trim() || '학생';
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-function buildMarkdownReport(r: SegibuAnalysis, studentName: string, keywords: { text: string; size: number }[]): string {
+function formatHtmlBlock(value: string) {
+  const safe = escapeHtml(value || '-')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br />');
+  return `<p>${safe}</p>`;
+}
+
+function scoreCardHtml(label: string, score: number, color: string) {
+  return `
+    <div class="score-card" style="border-top-color: ${color}">
+      <div class="score-label">${escapeHtml(label)}</div>
+      <div class="score-row"><strong>${score}</strong><span>/100</span></div>
+      <div class="score-track"><span style="width: ${score}%; background: ${color}"></span></div>
+    </div>
+  `;
+}
+
+function readinessHtml(readiness: SegibuAnalysis['admissionsReadiness']) {
+  if (!readiness) return '';
+  const weaknesses = readiness.criticalWeaknesses.slice(0, 4).map((item) => `
+    <div class="weakness">
+      <div class="chip">${escapeHtml(COMP_LABELS[item.competency])} 보완</div>
+      <strong>${escapeHtml(item.issue)}</strong>
+      <p>${escapeHtml(item.recommendation)}</p>
+    </div>
+  `).join('');
+  const actions = readiness.nextActions.slice(0, 5).map((action) => `
+    <li><strong>${action.priority}. ${escapeHtml(SERVICE_LABELS[action.linkedService])}</strong> ${escapeHtml(action.action)}<br /><span>${escapeHtml(action.reason)}</span></li>
+  `).join('');
+
+  return `
+    <section class="section avoid">
+      <h2>상담 처방 요약</h2>
+      ${formatHtmlBlock(readiness.overall)}
+      ${weaknesses ? `<div class="weakness-grid">${weaknesses}</div>` : ''}
+      ${actions ? `<ol class="actions">${actions}</ol>` : ''}
+    </section>
+  `;
+}
+
+function buildSegibuReportPrintHtml(r: SegibuAnalysis, studentName: string, keywords: { text: string; size: number }[]) {
   const readiness = r.admissionsReadiness;
-  const lines = [
-    `# ${studentName} 학생부 리포트`,
-    '',
-    `- 학교: ${r.school || '-'}`,
-    `- 학년: ${r.grade || '-'}`,
-    `- 목표 학과: ${r.targetDept || '-'}`,
-    `- 학업역량: ${r.scores.academic}점`,
-    `- 진로역량: ${r.scores.career}점`,
-    `- 공동체역량: ${r.scores.community}점`,
-    '',
-    '## 핵심 요약',
-    '',
-    `### 학업역량`,
-    r.summaryHighlights.academic || '-',
-    '',
-    `### 진로역량`,
-    r.summaryHighlights.career || '-',
-    '',
-    `### 공동체역량`,
-    r.summaryHighlights.community || '-',
-    '',
-    '## 핵심 키워드',
-    '',
-    keywords.map(k => k.text).join(', ') || '-',
-    '',
-    '## 향후 전략',
-    '',
-    `### 심화 탐구 제안`,
-    toText(r.futureStrategy.deepDive) || '-',
-    '',
-    `### 연계 추천 과목`,
-    toText(r.futureStrategy.subjects) || '-',
-  ];
+  const meta = [r.grade, r.targetDept && `목표 학과: ${r.targetDept}`].filter(Boolean).join(' · ');
+  const scoreCards = [
+    scoreCardHtml('학업역량', r.scores.academic, T.comp.academic.color),
+    scoreCardHtml('진로역량', r.scores.career, T.comp.career.color),
+    scoreCardHtml('공동체역량', r.scores.community, T.comp.community.color),
+  ].join('');
+  const highlights = (['academic', 'career', 'community'] as const).map((key) => `
+    <div class="highlight" style="border-top-color: ${T.comp[key].color}">
+      <h3 style="color: ${T.comp[key].color}">${escapeHtml(T.comp[key].label)}</h3>
+      ${formatHtmlBlock(r.summaryHighlights[key] || '-')}
+    </div>
+  `).join('');
+  const keywordHtml = keywords.slice(0, 18).map((keyword) => `<span>${escapeHtml(keyword.text)}</span>`).join('');
 
-  if (readiness) {
-    lines.push(
-      '',
-      '## 상담 처방',
-      '',
-      readiness.overall || '-',
-      '',
-      '### 주요 보완점',
-      '',
-      ...readiness.criticalWeaknesses.flatMap(item => [
-        `- ${COMP_LABELS[item.competency]}: ${item.issue}`,
-        `  - 처방: ${item.recommendation}`,
-      ]),
-      '',
-      '### 다음 액션',
-      '',
-      ...readiness.nextActions.map(action => `- ${action.priority}. [${SERVICE_LABELS[action.linkedService]}] ${action.action}: ${action.reason}`),
-      '',
-      '### 분석 신뢰도',
-      '',
-      `- confidence: ${readiness.reliability.confidence}`,
-      `- missingData: ${readiness.reliability.missingData.join(', ') || '-'}`,
-      `- notes: ${readiness.reliability.notes || '-'}`,
-    );
-  }
+  return `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(studentName)} 학생부 리포트</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    :root {
+      --text: #191F28;
+      --muted: #4E5968;
+      --subtle: #8B95A1;
+      --border: #D1D6DB;
+      --line: #E5E8EB;
+      --primary: #1B64DA;
+      --primary-soft: #EBF2FF;
+      --bg: #F4F6F8;
+    }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.65; }
+    .toolbar { max-width: 210mm; margin: 24px auto 12px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
+    .toolbar button { height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); font-weight: 800; cursor: pointer; }
+    .sheet { width: 210mm; min-height: 297mm; margin: 0 auto 28px; padding: 14mm; background: #fff; box-shadow: 0 16px 42px rgba(25, 31, 40, 0.12); }
+    header { padding-bottom: 14px; margin-bottom: 18px; border-bottom: 2px solid var(--text); break-inside: avoid; page-break-inside: avoid; }
+    .eyebrow { color: var(--primary); font-size: 11px; font-weight: 900; margin-bottom: 5px; }
+    h1 { margin: 0; font-size: 23px; line-height: 1.25; letter-spacing: 0; }
+    .meta { margin-top: 8px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+    .score-grid, .highlight-grid, .weakness-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .score-card, .highlight, .weakness, .strategy-card { border: 1px solid var(--line); border-top: 3px solid var(--primary); border-radius: 8px; padding: 10px 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+    .score-label, .chip { font-size: 11px; font-weight: 900; color: var(--muted); margin-bottom: 4px; }
+    .score-row { display: flex; align-items: baseline; gap: 4px; }
+    .score-row strong { font-size: 27px; line-height: 1; }
+    .score-row span { color: var(--subtle); font-size: 11px; }
+    .score-track { margin-top: 9px; height: 6px; border-radius: 999px; background: #EEF2F6; overflow: hidden; }
+    .score-track span { display: block; height: 100%; border-radius: inherit; }
+    .section { margin-top: 18px; }
+    .avoid { break-inside: avoid; page-break-inside: avoid; }
+    h2 { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-soft); font-size: 17px; line-height: 1.35; }
+    h3 { margin: 0 0 6px; font-size: 13px; }
+    p { margin: 0; color: var(--muted); font-size: 12.8px; line-height: 1.7; }
+    p + p { margin-top: 8px; }
+    strong { color: var(--text); }
+    .keywords { display: flex; flex-wrap: wrap; gap: 6px; }
+    .keywords span { padding: 4px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 800; }
+    .actions { margin: 10px 0 0; padding-left: 18px; color: var(--text); font-size: 12.7px; }
+    .actions li { margin-bottom: 7px; break-inside: avoid; page-break-inside: avoid; }
+    .actions span { color: var(--muted); }
+    .strategy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .privacy { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 11.5px; }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .sheet { width: 210mm; min-height: 297mm; margin: 0; padding: 14mm; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>학생부 종합 리포트</div>
+    <button onclick="window.print()">인쇄 / PDF 저장</button>
+  </div>
+  <main class="sheet">
+    <header>
+      <div class="eyebrow">학생부 종합 리포트</div>
+      <h1>${escapeHtml(studentName)} 학생 학생부 리포트</h1>
+      ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ''}
+    </header>
+    <section class="score-grid avoid">${scoreCards}</section>
+    ${readinessHtml(readiness)}
+    <section class="section">
+      <h2>3대 역량 핵심 요약</h2>
+      <div class="highlight-grid">${highlights}</div>
+    </section>
+    ${keywordHtml ? `<section class="section avoid"><h2>핵심 키워드</h2><div class="keywords">${keywordHtml}</div></section>` : ''}
+    <section class="section avoid">
+      <h2>향후 전략 제언</h2>
+      <div class="strategy-grid">
+        <div class="strategy-card">${formatHtmlBlock(toText(r.futureStrategy.deepDive) || '-')}</div>
+        <div class="strategy-card">${formatHtmlBlock(toText(r.futureStrategy.subjects) || '-')}</div>
+      </div>
+    </section>
+    <div class="privacy">생기부 원문, 원문 인용, AI 분석 원문은 저장/출력 파일에서 제외했습니다.</div>
+  </main>
+</body>
+</html>`;
+}
 
-  lines.push('', '## 개인정보 보호 메모', '', '생기부 원문, 원문 인용, AI 분석 원문은 저장/출력 파일에서 제외했습니다.');
-  return lines.join('\n');
+export function openSegibuReportPrintWindow(r: SegibuAnalysis, studentName: string, keywords: { text: string; size: number }[] = []) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+  printWindow.document.write(buildSegibuReportPrintHtml(r, studentName, keywords));
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 250);
 }
 
 // 연도 탭 + 텍스트 + 하이라이트 뷰
@@ -342,8 +431,6 @@ export function StudentReportView({
   const [mainTab, setMainTab] = useState<MainTab>('overview');
   const [changcheTab, setChangcheTab] = useState<ChangcheTab>('individual');
   const [curriculumTab, setCurriculumTab] = useState<CurriculumTab>('korean');
-  const [downloading, setDownloading] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
 
   if (!segibuAnalysis) {
     return (
@@ -370,39 +457,8 @@ export function StudentReportView({
     ...(readiness?.criticalWeaknesses.flatMap(item => [item.issue, item.recommendation]) ?? []),
   ].filter((text): text is string => Boolean(text));
   const keywords = extractKeywords(allTexts);
-
-  // PDF 다운로드
-  async function handlePdf() {
-    if (!reportRef.current) return;
-    setDownloading(true);
-    try {
-      const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF' });
-      const imgW = 210;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      let y = 0;
-      const pageH = 297;
-      while (y < imgH) {
-        if (y > 0) pdf.addPage();
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, -y, imgW, imgH);
-        y += pageH;
-      }
-      pdf.save(`${resolvedStudentName}_학생부리포트.pdf`);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  function handleMarkdown() {
-    const markdown = buildMarkdownReport(r, resolvedStudentName, keywords);
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeFilename(resolvedStudentName)}_학생부리포트.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const activeMainTab = embedded ? 'overview' : mainTab;
+  const openPrintDocument = () => openSegibuReportPrintWindow(r, resolvedStudentName, keywords);
 
   const tabStyle = (active: boolean) => ({
     padding: '6px 14px', fontSize: 13, fontWeight: active ? 700 : 500, borderRadius: 20, border: 'none', cursor: 'pointer', fontFamily: FONT,
@@ -417,7 +473,7 @@ export function StudentReportView({
   });
 
   return (
-    <div ref={reportRef} style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16, background: embedded ? 'transparent' : T.bg }}>
+    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16, background: embedded ? 'transparent' : T.bg }}>
 
       {/* ── 헤더 ── */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: embedded ? '16px 18px' : '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -431,38 +487,36 @@ export function StudentReportView({
           </div>
           {!embedded && r.school && <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 3, fontFamily: FONT }}>{r.school}</div>}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button onClick={handleMarkdown} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 8, border: `1px solid ${T.border}`, cursor: 'pointer',
-            background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 700, fontFamily: FONT,
-          }}>
-            Markdown 저장
-          </button>
-          <button onClick={handlePdf} disabled={downloading} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: downloading ? 'not-allowed' : 'pointer',
-            background: T.primary, color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: FONT, opacity: downloading ? 0.7 : 1,
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 16L6 10h4V3h4v7h4l-6 6z" fill="white"/><path d="M5 20h14" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
-            {downloading ? '생성 중...' : 'PDF 저장'}
-          </button>
-        </div>
+        {!embedded && (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button onClick={openPrintDocument} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: T.primary, color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: FONT,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 16L6 10h4V3h4v7h4l-6 6z" fill="white"/><path d="M5 20h14" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+              인쇄 / PDF 저장
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── 메인 탭 ── */}
-      <div style={{ display: 'flex', gap: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '6px 8px', flexWrap: 'wrap' }}>
-        {([['overview', '종합 현황'], ['changche', '창의적 체험활동'], ['curriculum', '교과 세부능력'], ['behavior', '행동 특성'], ['critical', '비판적 분석']] as const).map(([k, l]) => (
-          <button key={k} style={tabStyle(mainTab === k)} onClick={() => setMainTab(k)}>{l}</button>
-        ))}
-      </div>
+      {!embedded && (
+        <div style={{ display: 'flex', gap: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '6px 8px', flexWrap: 'wrap' }}>
+          {([['overview', '종합 현황'], ['changche', '창의적 체험활동'], ['curriculum', '교과 세부능력'], ['behavior', '행동 특성'], ['critical', '비판적 분석']] as const).map(([k, l]) => (
+            <button key={k} style={tabStyle(mainTab === k)} onClick={() => setMainTab(k)}>{l}</button>
+          ))}
+        </div>
+      )}
 
       {/* ── 종합 현황 ── */}
-      {mainTab === 'overview' && (
+      {activeMainTab === 'overview' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
 
           {/* 역량 레이더 */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 12, fontFamily: FONT }}>3대 역량 레이더</div>
-            <CompRadar scores={r.scores} />
+            <CompRadar scores={r.scores} height={embedded ? 300 : 260} />
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 8 }}>
               {(['academic', 'career', 'community'] as const).map(k => (
                 <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -525,7 +579,7 @@ export function StudentReportView({
       )}
 
       {/* ── 창의적 체험활동 ── */}
-      {mainTab === 'changche' && (
+      {activeMainTab === 'changche' && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
             {CHANGCHE_TABS.map(({ key, label }) => (
@@ -539,7 +593,7 @@ export function StudentReportView({
       )}
 
       {/* ── 교과 세부능력 ── */}
-      {mainTab === 'curriculum' && (
+      {activeMainTab === 'curriculum' && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
             {CURRICULUM_TABS.map(({ key, label }) => (
@@ -553,7 +607,7 @@ export function StudentReportView({
       )}
 
       {/* ── 행동 특성 ── */}
-      {mainTab === 'behavior' && (
+      {activeMainTab === 'behavior' && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '20px 22px' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 16, fontFamily: FONT }}>행동 특성 및 종합 의견</div>
           <YearTabView
@@ -563,7 +617,7 @@ export function StudentReportView({
       )}
 
       {/* ── 비판적 분석 ── */}
-      {mainTab === 'critical' && (
+      {activeMainTab === 'critical' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ background: '#FFF7ED', border: `1px solid #FED7AA`, borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>

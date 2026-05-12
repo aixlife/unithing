@@ -35,10 +35,6 @@ function createSnapshotId() {
   return `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function safeFilename(name: string) {
-  return name.replace(/[\\/:*?"<>|]/g, '_').trim() || '학생';
-}
-
 function uniq(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
@@ -83,50 +79,140 @@ function buildSnapshot(input: {
   };
 }
 
-function buildMarkdown(snapshot: RoadmapSnapshot, savedAtLabel: string) {
-  return [
-    `# ${snapshot.studentName} 진학 설계 로드맵`,
-    '',
-    `- 저장 시각: ${savedAtLabel}`,
-    `- 목표 학과: ${snapshot.targetDept || '-'}`,
-    '',
-    '## 현재 학생부 요약',
-    '',
-    snapshot.analysisSummary || '-',
-    '',
-    '## 목표 대학',
-    '',
-    snapshot.targetSummary || '-',
-    '',
-    '## 과목 선택안',
-    '',
-    snapshot.subjectSummary || '-',
-    '',
-    '## 세특 활동안',
-    '',
-    snapshot.seteukSummary || '-',
-    '',
-    '## 다음 상담 체크리스트',
-    '',
-    ...snapshot.nextChecklist.map((item) => `- ${item}`),
-    '',
-  ].join('\n');
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatPrintBlock(value: string) {
+  const paragraphs = (value || '-')
+    .split(/\n{2,}/g)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  return paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br />')}</p>`)
+    .join('');
+}
+
+function buildRoadmapPrintHtml(snapshot: RoadmapSnapshot, statuses: RoadmapStatus[], savedAtLabel: string, studentMeta: string) {
+  const statusRows = statuses.map((item) => `
+    <div class="status ${item.done ? 'done' : ''}">
+      <strong>${escapeHtml(item.label)}</strong>
+      <span>${escapeHtml(item.detail)}</span>
+    </div>
+  `).join('');
+  const checklist = snapshot.nextChecklist.map((item, index) => `
+    <li><strong>${index + 1}</strong><span>${escapeHtml(item)}</span></li>
+  `).join('');
+
+  return `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(snapshot.studentName)} 진학 설계 로드맵</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    :root {
+      --text: #191F28;
+      --muted: #4E5968;
+      --subtle: #8B95A1;
+      --border: #D1D6DB;
+      --line: #E5E8EB;
+      --primary: #1B64DA;
+      --primary-soft: #EBF2FF;
+      --success: #16A34A;
+      --success-soft: #DCFCE7;
+      --bg: #F4F6F8;
+    }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.65; }
+    .toolbar { max-width: 210mm; margin: 24px auto 12px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
+    .toolbar button { height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); font-weight: 800; cursor: pointer; }
+    .sheet { width: 210mm; min-height: 297mm; margin: 0 auto 28px; padding: 14mm; background: #fff; box-shadow: 0 16px 42px rgba(25,31,40,0.12); }
+    header { border-bottom: 2px solid var(--text); padding-bottom: 13px; margin-bottom: 15px; break-inside: avoid; page-break-inside: avoid; }
+    .eyebrow { color: var(--primary); font-size: 11px; font-weight: 900; margin-bottom: 5px; }
+    h1 { margin: 0; font-size: 23px; line-height: 1.28; letter-spacing: 0; }
+    .meta { margin-top: 8px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+    .status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-bottom: 16px; }
+    .status { border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px; background: #fff; min-height: 58px; }
+    .status.done { background: var(--success-soft); border-color: #86EFAC; }
+    .status strong { display: block; font-size: 11.5px; color: var(--text); margin-bottom: 3px; }
+    .status span { display: block; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .section { border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+    .section.wide { grid-column: 1 / -1; }
+    h2 { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-soft); font-size: 15.5px; line-height: 1.35; }
+    p { margin: 0; color: var(--muted); font-size: 12.3px; line-height: 1.7; }
+    p + p { margin-top: 7px; }
+    ol { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0; margin: 0; }
+    li { display: grid; grid-template-columns: 24px 1fr; gap: 8px; padding: 8px 9px; border-radius: 8px; background: #F8FAFC; border: 1px solid var(--line); break-inside: avoid; page-break-inside: avoid; }
+    li strong { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: var(--primary-soft); color: var(--primary); font-size: 11px; }
+    li span { font-size: 12px; color: var(--text); font-weight: 700; line-height: 1.5; }
+    footer { margin-top: 14px; padding-top: 9px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 11px; }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .sheet { width: 210mm; min-height: 297mm; margin: 0; padding: 14mm; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>진학 설계 로드맵</div>
+    <button onclick="window.print()">인쇄 / PDF 저장</button>
+  </div>
+  <main class="sheet">
+    <header>
+      <div class="eyebrow">진학 설계 로드맵</div>
+      <h1>${escapeHtml(snapshot.studentName)} 상담 로드맵</h1>
+      <div class="meta">${escapeHtml(studentMeta)} · 목표 학과 ${escapeHtml(snapshot.targetDept || '-')} · 저장 시각 ${escapeHtml(savedAtLabel)}</div>
+    </header>
+    <section class="status-grid">${statusRows}</section>
+    <div class="grid">
+      <section class="section wide"><h2>현재 학생부 요약</h2>${formatPrintBlock(snapshot.analysisSummary)}</section>
+      <section class="section"><h2>목표 대학 3 Picks</h2>${formatPrintBlock(snapshot.targetSummary)}</section>
+      <section class="section"><h2>과목 선택안</h2>${formatPrintBlock(snapshot.subjectSummary)}</section>
+      <section class="section wide"><h2>세특 활동안</h2>${formatPrintBlock(snapshot.seteukSummary)}</section>
+      <section class="section wide"><h2>다음 상담 체크리스트</h2><ol>${checklist}</ol></section>
+    </div>
+    <footer>화면 조작 버튼과 탭은 출력물에서 제외했습니다.</footer>
+  </main>
+</body>
+</html>`;
 }
 
 function Section({
   title,
   children,
   action,
+  onClick,
 }: {
   title: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <section style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 22 }}>
+    <section
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!onClick) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 22, cursor: onClick ? 'pointer' : 'default' }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
         <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: T.text, fontFamily: FONT }}>{title}</h3>
-        {action}
+        {action && <div onClick={(event) => event.stopPropagation()}>{action}</div>}
       </div>
       {children}
     </section>
@@ -256,8 +342,6 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
     nextChecklist: checklist,
   }), [checklist, currentStudent?.name, latestSeteuk, picks, readiness?.overall, segibuAnalysis?.summaryHighlights.career, subjectRecords.length, subjects.core, subjects.recommended, targetDept]);
 
-  const savedAtLabel = new Date(snapshot.savedAt).toLocaleString('ko-KR');
-
   const handleSave = async () => {
     if (!currentStudent) return;
     setSaveMessage(null);
@@ -270,14 +354,15 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
     setSaveMessage(updated ? '상담 로드맵 저장 완료' : '상담 로드맵 저장 실패');
   };
 
-  const handleDownloadMarkdown = () => {
-    const blob = new Blob([buildMarkdown(snapshot, savedAtLabel)], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeFilename(snapshot.studentName)}_진학설계로드맵.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const openPrintDocument = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const savedAtLabel = new Date(snapshot.savedAt).toLocaleString('ko-KR');
+    const studentMeta = [currentStudent?.school, currentStudent?.grade].filter(Boolean).join(' · ') || '-';
+    printWindow.document.write(buildRoadmapPrintHtml(snapshot, statuses, savedAtLabel, studentMeta));
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
   };
 
   if (!currentStudent) {
@@ -311,11 +396,8 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
             <button onClick={handleSave} style={{ height: 38, padding: '0 14px', borderRadius: 9, border: `1px solid ${T.primary}`, background: T.primary, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
               로드맵 저장
             </button>
-            <button onClick={handleDownloadMarkdown} style={{ height: 38, padding: '0 14px', borderRadius: 9, border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
-              상담지 Markdown
-            </button>
-            <button onClick={() => window.print()} style={{ height: 38, padding: '0 14px', borderRadius: 9, border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
-              출력
+            <button onClick={openPrintDocument} style={{ height: 38, padding: '0 14px', borderRadius: 9, border: `1px solid ${T.borderStrong}`, background: T.surface, color: T.textMuted, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: FONT }}>
+              인쇄 / PDF 저장
             </button>
           </div>
         </div>
@@ -336,7 +418,7 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(320px, 0.85fr)', gap: 16 }}>
-        <Section title="현재 학생부 요약" action={<button onClick={() => onOpenService?.(3)} style={linkButtonStyle()}>분석 열기</button>}>
+        <Section title="현재 학생부 요약" onClick={() => onOpenService?.(3)} action={<button onClick={() => onOpenService?.(3)} style={linkButtonStyle()}>분석 열기</button>}>
           <p style={{ margin: 0, fontSize: 14, color: T.textMuted, lineHeight: 1.75, fontFamily: FONT }}>{snapshot.analysisSummary}</p>
           {readiness?.criticalWeaknesses.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
@@ -350,11 +432,11 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
           ) : null}
         </Section>
 
-        <Section title="목표 대학 3 Picks" action={<button onClick={() => onOpenService?.(1)} style={linkButtonStyle()}>대학 찾기</button>}>
+        <Section title="목표 대학 3 Picks" onClick={() => onOpenService?.(1)} action={<button onClick={() => onOpenService?.(1)} style={linkButtonStyle()}>대학 찾기</button>}>
           <PickList picks={picks} />
         </Section>
 
-        <Section title="과목 선택안" action={<button onClick={() => onOpenService?.(2)} style={linkButtonStyle()}>과목 가이드</button>}>
+        <Section title="과목 선택안" onClick={() => onOpenService?.(2)} action={<button onClick={() => onOpenService?.(2)} style={linkButtonStyle()}>과목 가이드</button>}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <SubjectBlock label="2학년 우선 확인" subjects={subjects.core} fallback="목표 대학/학과 저장 후 핵심과목을 확인합니다." />
             <SubjectBlock label="3학년 심화 연결" subjects={subjects.recommended} fallback="권장과목 데이터가 있으면 심화 과목 후보가 표시됩니다." />
@@ -364,7 +446,7 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
           </div>
         </Section>
 
-        <Section title="세특 활동안" action={<button onClick={() => onOpenService?.(4)} style={linkButtonStyle()}>세특 도우미</button>}>
+        <Section title="세특 활동안" onClick={() => onOpenService?.(4)} action={<button onClick={() => onOpenService?.(4)} style={linkButtonStyle()}>세특 도우미</button>}>
           {latestSeteuk ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: T.text, lineHeight: 1.45, fontFamily: FONT }}>{latestSeteuk.selectedTopic}</div>

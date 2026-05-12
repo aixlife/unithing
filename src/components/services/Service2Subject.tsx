@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState, useMemo, useRef, Fragment } from 'react';
-import { jsPDF } from 'jspdf';
-import { toJpeg } from 'html-to-image';
 import {
   FIELD_DATA, SUBJECT_AREAS, SUBJECT_TYPES, SUNGSHIN_GROUPS, MANDATORY_SUBJECTS,
   type Major, type Field, type SungshinSubject, type SelectionGroup
@@ -127,6 +125,15 @@ function normalizeMajorName(name: string) {
   return name.replace(/\s+/g, '').replace(/\(.*\)/g, '').replace(/(과|부|전공|계열)$/, '').toLowerCase();
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function getGradingType(name: string) {
   const n = normalizeSubjectName(name);
   const core = ['문학', '독서와 작문', '대수', '미적분Ⅰ', '영어Ⅰ', '영어Ⅱ'].map(normalizeSubjectName);
@@ -156,8 +163,6 @@ export function Service2Subject() {
   const [curriculumParseLoading, setCurriculumParseLoading] = useState(false);
   const [curriculumParseMessage, setCurriculumParseMessage] = useState<string | null>(null);
   const [curriculumParseNotes, setCurriculumParseNotes] = useState<string[]>([]);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [univSearchTerm, setUnivSearchTerm] = useState('');
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<string | null>(null);
@@ -171,7 +176,6 @@ export function Service2Subject() {
   const [subjectPlan, setSubjectPlan] = useState<SubjectRecommendationPlan | null>(null);
   const [subjectPlanLoading, setSubjectPlanLoading] = useState(false);
   const [subjectPlanError, setSubjectPlanError] = useState<string | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
   const curriculumFileRef = useRef<HTMLInputElement>(null);
 
   const allMajors = useMemo(() => {
@@ -205,22 +209,6 @@ export function Service2Subject() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [studentTargetPick, univSearchTerm]);
-
-  useEffect(() => {
-    if (selectedMajor || searchTerm.trim() || !studentTargetDept) return;
-
-    const timeoutId = window.setTimeout(() => {
-      setSearchTerm(studentTargetDept);
-      const targetKey = normalizeMajorName(studentTargetDept);
-      const matchedField = FIELD_DATA.find(field => field.majors.some(major => normalizeMajorName(major.name) === targetKey));
-      const matchedMajor = matchedField?.majors.find(major => normalizeMajorName(major.name) === targetKey);
-      if (matchedField && matchedMajor) {
-        setSelectedField(matchedField);
-        setSelectedMajor(matchedMajor);
-      }
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [searchTerm, selectedMajor, studentTargetDept]);
 
   const searchResults = useMemo(() => {
     if (!searchTerm.trim()) return [];
@@ -278,29 +266,6 @@ export function Service2Subject() {
   };
   const resetSelection = () => { setSelectedField(null); setSelectedMajor(null); setSearchTerm(''); };
 
-  const handleDownloadPDF = async () => {
-    if (!printRef.current || !selectedMajor || isDownloading) return;
-    setIsDownloading(true); setErrorMsg(null);
-    try {
-      const dataUrl = await toJpeg(printRef.current, { quality: 0.95, backgroundColor: '#ffffff', pixelRatio: 2 });
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 15;
-      const img = new Image(); img.src = dataUrl;
-      await new Promise((resolve) => (img.onload = resolve));
-      const maxW = pdfWidth - margin * 2; const maxH = pdfHeight - margin * 2;
-      let fw = maxW; let fh = (img.height * fw) / img.width;
-      if (fh > maxH) { fh = maxH; fw = (img.width * fh) / img.height; }
-      pdf.addImage(dataUrl, 'JPEG', (pdfWidth - fw) / 2, margin, fw, fh);
-      pdf.save(`2022개정_선택과목가이드_${selectedMajor.name}_${planGrade}학년.pdf`);
-    } catch {
-      setErrorMsg('PDF 생성 실패. 브라우저 인쇄(PDF로 저장)를 이용해 주세요.');
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   const planData = useMemo(() => {
     if (!selectedMajor) return [];
     return SUNGSHIN_GROUPS.filter(g => g.grade === planGrade).map(group => {
@@ -324,6 +289,153 @@ export function Service2Subject() {
       };
     });
   }, [selectedMajor, planGrade]);
+
+  const openSubjectPlanDocument = () => {
+    if (!selectedMajor) return;
+
+    const check = (checked: boolean, recommended = false) => checked
+      ? `<span class="check ${recommended ? 'recommended' : 'mandatory'}">✓</span>`
+      : '';
+    const typeBadge = (type: string) => {
+      const cls = type === '진로' ? 'career' : type === '융합' ? 'fusion' : 'default';
+      return `<span class="badge ${cls}">${escapeHtml(type)}</span>`;
+    };
+    const mandatorySubjects = MANDATORY_SUBJECTS[planGrade] || [];
+    const mandatoryRows = mandatorySubjects.map((subject, idx) => {
+      const nn = normalizeSubjectName(subject.name);
+      const area = Object.keys(SUBJECT_AREAS).find(a => SUBJECT_AREAS[a].some(s => normalizeSubjectName(s) === nn)) || '공통';
+      const typeKey = Object.keys(SUBJECT_TYPES).find(k => normalizeSubjectName(k) === nn);
+      const type = typeKey ? SUBJECT_TYPES[typeKey] : '일반';
+
+      return `
+        <tr class="mandatory-row">
+          ${idx === 0 ? `<td rowspan="${mandatorySubjects.length}" class="method mandatory-method">필수</td>` : ''}
+          <td>${escapeHtml(area)}</td>
+          <td class="subject-name strong">${escapeHtml(subject.name)}</td>
+          <td class="center small">${escapeHtml(type)} 선택</td>
+          <td class="center">${check(subject.semesters.includes(1), true)}</td>
+          <td class="center">${check(subject.semesters.includes(2), true)}</td>
+          <td class="center small">${escapeHtml(getGradingType(subject.name))}</td>
+          <td></td>
+        </tr>
+      `;
+    }).join('');
+    const groupRows = planData.map((group) => group.groupedSubjects.map((areaGroup, aIdx) => (
+      areaGroup.subjects.map((subject, sIdx) => {
+        const firstInGroup = aIdx === 0 && sIdx === 0;
+        const firstInArea = sIdx === 0;
+        const lastInGroup = aIdx === group.groupedSubjects.length - 1 && sIdx === areaGroup.subjects.length - 1;
+
+        return `
+          <tr class="${subject.isRecommended ? 'recommended-row' : ''} ${firstInGroup ? 'group-start' : ''} ${lastInGroup ? 'group-end' : ''}">
+            ${firstInGroup ? `<td rowspan="${group.subjects.length}" class="method">${escapeHtml(String(group.id))}<br />[택${group.selectCount}]<br />(${group.credits || 4}학점)</td>` : ''}
+            ${firstInArea ? `<td rowspan="${areaGroup.subjects.length}">${escapeHtml(areaGroup.area)}</td>` : ''}
+            <td class="subject-name ${subject.isRecommended ? 'recommended-text' : ''}">${escapeHtml(subject.name)}</td>
+            <td class="center">${typeBadge(subject.type)}</td>
+            <td class="center">${check(subject.semesters.includes(1), subject.isRecommended)}</td>
+            <td class="center">${check(subject.semesters.includes(2), subject.isRecommended)}</td>
+            <td class="center small">${escapeHtml(subject.gradingType)}</td>
+            <td></td>
+          </tr>
+        `;
+      }).join('')
+    )).join('')).join('');
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>${planGrade}학년 선택 과목 가이드</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    :root {
+      --text: #191F28;
+      --muted: #4E5968;
+      --subtle: #8B95A1;
+      --border: #D1D6DB;
+      --line: #E5E8EB;
+      --primary: #1B64DA;
+      --primary-soft: #EBF2FF;
+      --success-soft: #D1FAE5;
+      --bg: #F4F6F8;
+    }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .toolbar { max-width: 210mm; margin: 24px auto 12px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
+    .toolbar button { height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); font-weight: 800; cursor: pointer; }
+    .sheet { width: 210mm; min-height: 297mm; margin: 0 auto 28px; background: #fff; box-shadow: 0 16px 42px rgba(25, 31, 40, 0.12); }
+    header { background: var(--primary); color: #fff; padding: 12px 15px; display: flex; justify-content: space-between; gap: 12px; align-items: center; break-inside: avoid; page-break-inside: avoid; }
+    h1 { margin: 0; font-size: 16px; line-height: 1.35; letter-spacing: 0; }
+    .meta { color: rgba(255,255,255,0.76); font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .content { padding: 13px 12px; }
+    table { width: 100%; table-layout: fixed; border-collapse: collapse; border: 1px solid var(--border); font-size: 9.2px; line-height: 1.35; }
+    thead { background: #F8FAFC; }
+    th, td { padding: 5px 5px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); vertical-align: middle; }
+    th { color: var(--muted); font-weight: 900; text-align: left; }
+    th.center, td.center { text-align: center; }
+    .method { width: 19mm; text-align: center; color: var(--muted); font-weight: 900; background: #fff; line-height: 1.45; }
+    .mandatory-method { color: var(--primary); background: var(--primary-soft); }
+    .subject-name { color: var(--text); font-weight: 650; }
+    .strong { font-weight: 850; }
+    .recommended-text { color: var(--primary); font-weight: 900; }
+    .mandatory-row, .recommended-row { background: var(--primary-soft); }
+    .small { font-size: 8px; color: var(--muted); }
+    .badge { display: inline-block; padding: 1px 5px; border-radius: 999px; font-size: 7.5px; font-weight: 900; }
+    .badge.career { background: var(--primary-soft); color: var(--primary); }
+    .badge.fusion { background: #EDE9FE; color: #7C3AED; }
+    .badge.default { background: var(--success-soft); color: #059669; }
+    .check { display: inline-flex; width: 13px; height: 13px; align-items: center; justify-content: center; border-radius: 3px; border: 1px solid var(--primary); font-size: 8px; font-weight: 900; }
+    .check.mandatory, .check.recommended { background: var(--primary); color: #fff; }
+    .group-start td { border-top: 2px solid var(--border); }
+    .group-end td { border-bottom: 2px solid var(--border); }
+    footer { padding: 9px 15px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; color: var(--subtle); font-size: 9px; }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .sheet { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>선택 과목 가이드</div>
+    <button onclick="window.print()">인쇄 / PDF 저장</button>
+  </div>
+  <main class="sheet">
+    <header>
+      <h1>${planGrade}학년 수강 신청 계획서</h1>
+      <div class="meta">숭신고등학교 | ${escapeHtml(selectedMajor.name)}</div>
+    </header>
+    <div class="content">
+      <table>
+        <thead>
+          <tr>
+            <th class="center" style="width:19mm">선택방법</th>
+            <th style="width:23mm">교과군</th>
+            <th>과목</th>
+            <th class="center" style="width:18mm">구분</th>
+            <th class="center" style="width:12mm">1학기</th>
+            <th class="center" style="width:12mm">2학기</th>
+            <th class="center" style="width:25mm">성적처리</th>
+            <th class="center" style="width:18mm">메모</th>
+          </tr>
+        </thead>
+        <tbody>${mandatoryRows}${groupRows}</tbody>
+      </table>
+    </div>
+    <footer>
+      <span>* 본 계획서는 전공 적합성을 고려한 추천 안이며, 실제 수강 신청 시 변경될 수 있습니다.</span>
+      <strong>제작 : 숭신고등학교 진로진학상담부 김강석</strong>
+    </footer>
+  </main>
+</body>
+</html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  };
 
   const processSemester = (raw: string): SungshinSubject[] => {
     return raw.split(',').map(s => s.trim()).filter(Boolean).map(name => ({ name, semesters: [1, 2] }));
@@ -725,42 +837,33 @@ export function Service2Subject() {
                 }}
               >
                 <IconSettings />
-                {isCustomMode ? '내 교육과정' : '학교 교육과정 업로드'}
+                {isCustomMode ? '내 교육과정' : '편제표 업로드'}
               </button>
 
               {/* PDF button */}
               {viewMode === 'plan' && (
                 <button
-                  onClick={handleDownloadPDF}
-                  disabled={isDownloading}
+                  onClick={openSubjectPlanDocument}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '8px 14px',
-                    background: isDownloading ? T.bgAlt : T.primary,
-                    color: isDownloading ? T.textSubtle : '#fff',
+                    background: T.primary,
+                    color: '#fff',
                     border: 'none',
                     borderRadius: 10,
                     fontSize: 13,
                     fontWeight: 700,
-                    cursor: isDownloading ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     fontFamily: FONT,
                     transition: 'background 0.15s',
                   }}
                 >
-                  {isDownloading ? (
-                    <span style={{ width: 14, height: 14, border: `2px solid ${T.textSubtle}`, borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-                  ) : <IconDownload />}
-                  {isDownloading ? '생성 중...' : `${planGrade}학년 PDF`}
+                  <IconDownload />
+                  인쇄 / PDF 저장
                 </button>
               )}
             </div>
           </div>
-
-          {errorMsg && (
-            <div style={{ background: T.dangerSoft, border: `1px solid #FECACA`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: T.danger }}>
-              {errorMsg}
-            </div>
-          )}
 
           {/* ===== subject view ===== */}
           {viewMode === 'subject' && subjectsByArea && (
@@ -1281,7 +1384,7 @@ export function Service2Subject() {
               </div>
 
               {/* Printable area */}
-              <div ref={printRef} style={{ background: T.surface }}>
+              <div style={{ background: T.surface }}>
                 {/* Print header */}
                 <div style={{ background: T.primary, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1450,7 +1553,7 @@ export function Service2Subject() {
             {/* Modal header */}
             <div style={{ background: T.text, padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>학교 교육과정 업로드/입력</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>선택 과목 가이드 설정</div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>편제표 PDF를 불러오거나 과목명을 직접 입력하세요</div>
               </div>
               <button onClick={() => setShowCustomForm(false)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
@@ -1460,7 +1563,7 @@ export function Service2Subject() {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div style={{ border: `1px solid ${T.primaryBorder}`, background: T.primarySoft, borderRadius: 12, padding: '14px 16px' }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: T.primary, marginBottom: 6 }}>학교 교육과정 편제표 PDF 업로드</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.primary, marginBottom: 6 }}>편제표 PDF 업로드</div>
                 <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.55, marginBottom: 10 }}>
                   제공된 대표 양식 1종을 기준으로 과목명, 학점, 학년, 학기, 택N을 추출합니다. Gemini 호출 1회가 사용되며, 추출 후 아래 입력칸에서 반드시 검수하세요.
                 </div>

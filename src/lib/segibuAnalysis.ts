@@ -65,6 +65,12 @@ const SEM_ALIASES = {
   avg: ['avg', 'average', '평균'],
 } as const;
 
+const COMP_ALIASES = {
+  academic: ['academic', 'academicCompetency', '학업역량', '학업 역량', '학업'],
+  career: ['career', 'careerCompetency', '진로역량', '진로 역량', '진로'],
+  community: ['community', 'communityCompetency', '공동체역량', '공동체 역량', '공동체'],
+} as const;
+
 function asRecord(value: unknown): UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as UnknownRecord : {};
 }
@@ -148,18 +154,18 @@ function normalizeGrades(value: unknown): GradeMatrix {
 function normalizeScores(value: unknown): SegibuAnalysis['scores'] {
   const raw = asRecord(value);
   return {
-    academic: normalizeScore(raw.academic),
-    career: normalizeScore(raw.career),
-    community: normalizeScore(raw.community),
+    academic: normalizeScore(pick(raw, COMP_ALIASES.academic)),
+    career: normalizeScore(pick(raw, COMP_ALIASES.career)),
+    community: normalizeScore(pick(raw, COMP_ALIASES.community)),
   };
 }
 
 function normalizeSummaryHighlights(value: unknown): SegibuAnalysis['summaryHighlights'] {
   const raw = asRecord(value);
   return {
-    academic: toText(raw.academic),
-    career: toText(raw.career),
-    community: toText(raw.community),
+    academic: toText(pick(raw, COMP_ALIASES.academic)),
+    career: toText(pick(raw, COMP_ALIASES.career)),
+    community: toText(pick(raw, COMP_ALIASES.community)),
   };
 }
 
@@ -185,9 +191,9 @@ function normalizeCompHighlight(value: unknown): CompHighlight {
   const raw = asRecord(value);
   const text = typeof value === 'string' ? value : '';
   return {
-    academic: toText(raw.academic, text),
-    career: toText(raw.career),
-    community: toText(raw.community),
+    academic: toText(pick(raw, COMP_ALIASES.academic), text),
+    career: toText(pick(raw, COMP_ALIASES.career)),
+    community: toText(pick(raw, COMP_ALIASES.community)),
   };
 }
 

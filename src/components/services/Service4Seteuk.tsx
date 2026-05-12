@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 import {
   getNaesinData,
@@ -135,13 +135,19 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
+function formatInlineHtml(value: string) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br />');
+}
+
 function renderPlanContent(item: PlanItem) {
   if (item.isStepByStep && item.steps) {
     return item.steps
-      .map((step) => `<div class="step"><strong>${escapeHtml(step.step)} ${escapeHtml(step.title)}</strong><span>${escapeHtml(step.description)}</span></div>`)
+      .map((step) => `<div class="step"><strong>${escapeHtml(step.step)} ${formatInlineHtml(step.title)}</strong><span>${formatInlineHtml(step.description)}</span></div>`)
       .join('');
   }
-  return escapeHtml(item.content ?? '').replace(/\n/g, '<br />');
+  return formatInlineHtml(item.content ?? '');
 }
 
 function renderDraftParagraphs(draft: string) {
@@ -152,7 +158,7 @@ function renderDraftParagraphs(draft: string) {
 
   const safeParagraphs = paragraphs.length > 0 ? paragraphs : ['세특 초안이 없습니다.'];
   return safeParagraphs
-    .map((paragraph) => `<p class="draft">${escapeHtml(paragraph).replace(/\n/g, '<br />')}</p>`)
+    .map((paragraph) => `<p class="draft">${formatInlineHtml(paragraph)}</p>`)
     .join('');
 }
 
@@ -603,6 +609,48 @@ function RemediationPanel({
   );
 }
 
+function renderInlineMarkdown(value: string) {
+  return value.split(/(\*\*.+?\*\*)/g).filter(Boolean).map((part, index) => {
+    const bold = part.match(/^\*\*(.+?)\*\*$/);
+    if (bold) return <strong key={index}>{bold[1]}</strong>;
+    return <Fragment key={index}>{part}</Fragment>;
+  });
+}
+
+function RichTextBlock({
+  value,
+  emptyText,
+  fontSize = 15,
+}: {
+  value: string;
+  emptyText: string;
+  fontSize?: number;
+}) {
+  const paragraphs = (value || emptyText)
+    .split(/\n{2,}/g)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return (
+    <>
+      {paragraphs.map((paragraph, index) => (
+        <p key={index} style={{ margin: index === 0 ? 0 : '10px 0 0', fontSize, color: T.text, lineHeight: 1.85, fontFamily: FONT }}>
+          {paragraph.split('\n').map((line, lineIndex) => (
+            <Fragment key={lineIndex}>
+              {lineIndex > 0 && <br />}
+              {renderInlineMarkdown(line)}
+            </Fragment>
+          ))}
+        </p>
+      ))}
+    </>
+  );
+}
+
+function stripPresentationMarkdown(value: string) {
+  return value.replace(/\*\*(.+?)\*\*/g, '$1').trim();
+}
+
 // ─── Phase 1: 기본 정보 ───────────────────────────────────────────────────────
 function Phase1({
   major, setMajor, interest, setInterest, activities, setActivities,
@@ -948,7 +996,7 @@ function Phase6({
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(draft).then(() => {
+    navigator.clipboard.writeText(stripPresentationMarkdown(draft)).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -1013,14 +1061,14 @@ function Phase6({
                                 {s.step}
                               </div>
                               <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3, fontFamily: FONT }}>{s.title}</div>
-                                <div style={{ fontSize: 13, color: T.textMuted, fontFamily: FONT }}>{s.description}</div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3, fontFamily: FONT }}>{renderInlineMarkdown(s.title)}</div>
+                                <div style={{ fontSize: 13, color: T.textMuted, fontFamily: FONT, lineHeight: 1.65 }}>{renderInlineMarkdown(s.description)}</div>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <span style={{ whiteSpace: 'pre-wrap' }}>{item.content}</span>
+                        <RichTextBlock value={item.content ?? ''} emptyText="내용 없음" fontSize={14} />
                       )}
                     </td>
                   </tr>
@@ -1050,11 +1098,11 @@ function Phase6({
             {copied ? '✓ 복사됨' : '세특 초안 복사'}
           </button>
         </div>
-        <div style={{ background: '#F0FDF4', border: `1px solid #BBF7D0`, borderRadius: 12, padding: '20px 22px', fontSize: 15, color: T.text, lineHeight: 1.9, fontFamily: FONT, fontStyle: 'italic' }}>
-          {draft || '세특 초안이 없습니다.'}
+        <div style={{ background: '#F0FDF4', border: `1px solid #BBF7D0`, borderRadius: 12, padding: '20px 22px', fontSize: 15, color: T.text, lineHeight: 1.9, fontFamily: FONT }}>
+          <RichTextBlock value={draft} emptyText="세특 초안이 없습니다." />
         </div>
         <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 8, textAlign: 'right', fontFamily: FONT }}>
-          총 {draft.length}자
+          총 {stripPresentationMarkdown(draft).length}자
         </div>
         </div>
       </div>

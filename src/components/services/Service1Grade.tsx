@@ -146,6 +146,10 @@ function formatGap(gap: number) {
   return gap.toFixed(2);
 }
 
+function getTargetPickSavingKey(slot: TargetPickSlot, univ: UnivResult) {
+  return `${slot}|${univ.name}|${univ.dept}|${univ.process}|${univ.type}`;
+}
+
 function TargetPicksPanel({
   studentName,
   picks,
@@ -294,14 +298,14 @@ function UniversityCard({
   myGrade,
   onSavePick,
   disabled,
-  savingSlot,
+  savingPickKey,
   savedSlots,
 }: {
   univ: UnivResult;
   myGrade: number;
   onSavePick: (slot: TargetPickSlot, univ: UnivResult) => void;
   disabled: boolean;
-  savingSlot: TargetPickSlot | null;
+  savingPickKey: string | null;
   savedSlots: TargetPickSlot[];
 }) {
   const [hovered, setHovered] = useState(false);
@@ -358,7 +362,7 @@ function UniversityCard({
           {TARGET_PICK_SLOTS.map(({ slot, label }) => {
             const pickStyle = getBadgeStyle(label);
             const isSaved = savedSlots.includes(slot);
-            const isSaving = savingSlot === slot;
+            const isSaving = savingPickKey === getTargetPickSavingKey(slot, univ);
             return (
               <button
                 key={slot}
@@ -410,7 +414,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [savingSlot, setSavingSlot] = useState<TargetPickSlot | null>(null);
+  const [savingPickKey, setSavingPickKey] = useState<string | null>(null);
 
   const conversion = useMemo(() => convertGrade(gpa5, conversionVersion), [gpa5, conversionVersion]);
   const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
@@ -490,6 +494,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
 
   const saveTargetPick = useCallback(async (slot: TargetPickSlot, univ: UnivResult) => {
     setSaveMessage(null);
+    if (savingPickKey) return;
     if (!currentStudent) {
       setSaveMessage('학생을 먼저 선택하거나 등록한 뒤 목표 대학을 저장할 수 있습니다.');
       return;
@@ -529,19 +534,23 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
       },
     };
 
-    setSavingSlot(slot);
-    const updated = await updateStudent(currentStudent.id, {
-      target_dept: univ.dept,
-      naesin_data: nextNaesinData,
-    });
-    setSavingSlot(null);
+    setSavingPickKey(getTargetPickSavingKey(slot, univ));
+    let updated = false;
+    try {
+      updated = Boolean(await updateStudent(currentStudent.id, {
+        target_dept: univ.dept,
+        naesin_data: nextNaesinData,
+      }));
+    } finally {
+      setSavingPickKey(null);
+    }
 
     if (!updated) {
       setSaveMessage('저장에 실패했습니다. 로그인 상태나 Supabase 연결을 확인해주세요.');
       return;
     }
     setSaveMessage(`${TARGET_PICK_LABELS[slot]} 목표로 ${univ.name} ${univ.dept}을 저장했습니다.`);
-  }, [conversion.grade9, conversion.reason, conversionVersion, currentStudent, gpa5, naesinData, searchRange, showAmbitious, targetPicks, updateStudent]);
+  }, [conversion.grade9, conversion.reason, conversionVersion, currentStudent, gpa5, naesinData, savingPickKey, searchRange, showAmbitious, targetPicks, updateStudent]);
 
   const clearTargetPick = useCallback(async (slot: TargetPickSlot) => {
     setSaveMessage(null);
@@ -564,9 +573,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
       university_picks: nextPicks,
     };
 
-    setSavingSlot(slot);
     const updated = await updateStudent(currentStudent.id, { naesin_data: nextNaesinData });
-    setSavingSlot(null);
 
     if (!updated) {
       setSaveMessage('목표 대학을 비우지 못했습니다. 잠시 후 다시 시도해주세요.');
@@ -783,7 +790,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
         studentName={currentStudent?.name ?? null}
         picks={targetPicks}
         weaknesses={readinessWeaknesses}
-        savingSlot={savingSlot}
+        savingSlot={null}
         onClear={clearTargetPick}
         onOpenService={onOpenService}
       />
@@ -979,8 +986,8 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
                   univ={univ}
                   myGrade={conversion.grade9}
                   onSavePick={saveTargetPick}
-                  disabled={!currentStudent}
-                  savingSlot={savingSlot}
+                  disabled={!currentStudent || Boolean(savingPickKey)}
+                  savingPickKey={savingPickKey}
                   savedSlots={TARGET_PICK_SLOTS
                     .filter(({ slot }) => {
                       const pick = targetPicks[slot];

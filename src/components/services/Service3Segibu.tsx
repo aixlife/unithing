@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 import { SegibuAnalysis, GradeMatrix, CategoryGrades } from '@/types/analysis';
-import { StudentReportView } from '@/components/services/StudentReportView';
+import { StudentReportView, openSegibuReportPrintWindow } from '@/components/services/StudentReportView';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -10,8 +10,6 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend,
 } from 'recharts';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 
 // ── 토큰 ──────────────────────────────────────────────────────────────────────
@@ -69,24 +67,6 @@ function toStr(v: any): string {
 
 function fmtGrade(v: number | null) {
   return v == null ? '-' : v.toFixed(2);
-}
-
-function ScoreBadge({ score, label, color }: { score: number; label: string; color: string }) {
-  const tier = score >= 85 ? '최상' : score >= 75 ? '상' : score >= 65 ? '중상' : score >= 55 ? '중' : '하';
-  return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
-      <div style={{ fontSize: 13, color: T.textMuted, fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span style={{ fontSize: 36, fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1 }}>{score}</span>
-        <span style={{ fontSize: 13, color: T.textSubtle }}>/100</span>
-        <span style={{ marginLeft: 4, fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: color + '1A', color }}>{tier}</span>
-      </div>
-      <div style={{ height: 5, background: T.bgAlt, borderRadius: 3, marginTop: 10, overflow: 'hidden' }}>
-        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.8s ease-out' }} />
-      </div>
-    </div>
-  );
 }
 
 // ── 성적 매트릭스 ─────────────────────────────────────────────────────────────
@@ -1295,11 +1275,11 @@ export function Service3Segibu() {
   const [tab, setTab] = useState<'summary' | 'report' | 'grades' | 'activities'>('summary');
   const [activityCategory, setActivityCategory] = useState<'individual' | 'club' | 'career_act'>('individual');
   const [curriculumKey, setCurriculumKey] = useState<'korean' | 'math' | 'english' | 'social' | 'science' | 'liberal' | 'arts_phys'>('korean');
-  const [yearTab, setYearTab] = useState<'y1' | 'y2' | 'y3'>('y1');
+  const [activityYearTab, setActivityYearTab] = useState<'y1' | 'y2' | 'y3'>('y1');
+  const [curriculumYearTab, setCurriculumYearTab] = useState<'y1' | 'y2' | 'y3'>('y1');
+  const [behaviorYearTab, setBehaviorYearTab] = useState<'y1' | 'y2' | 'y3'>('y1');
   const [showGuide, setShowGuide] = useState(false);
   const [showCriteria, setShowCriteria] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
   const [lastFileName, setLastFileName] = useState<string | null>(null);
 
   const handleAnalyze = useCallback((input: File | string) => {
@@ -1312,44 +1292,22 @@ export function Service3Segibu() {
     void clearSegibuAnalysis();
   };
 
-  const handlePDF = async () => {
-    if (!reportRef.current) return;
-    setIsPrinting(true);
-    try {
-      const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true });
-      const img = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const w = pdf.internal.pageSize.getWidth();
-      const h = (canvas.height * w) / canvas.width;
-      let y = 0;
-      const pageH = pdf.internal.pageSize.getHeight();
-      while (y < h) {
-        if (y > 0) pdf.addPage();
-        pdf.addImage(img, 'PNG', 0, -y, w, h);
-        y += pageH;
-      }
-      const name = segibuAnalysis?.studentName ?? '학생';
-      pdf.save(`${name}_생기부분석리포트.pdf`);
-    } finally {
-      setIsPrinting(false);
-    }
-  };
-
   if (analysisLoading) return <LoadingScreen fileName={lastFileName ?? undefined} />;
   if (!segibuAnalysis) return <UploadScreen currentStudentName={currentStudent?.name} onAnalyze={handleAnalyze} error={analysisError} />;
 
   const r = segibuAnalysis;
-  const avgAll = r.groupAverages.all;
   const readiness = r.admissionsReadiness;
+  const resolvedStudentName = r.studentName ?? currentStudent?.name ?? '학생';
+  const openPrintDocument = () => openSegibuReportPrintWindow(r, resolvedStudentName);
 
   return (
-    <div ref={reportRef} style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 'clamp(22px, 2.8vw, 36px)', fontWeight: 800, letterSpacing: '-0.035em', color: T.text, margin: '0 0 4px', lineHeight: 1.2 }}>
-            {r.studentName ?? currentStudent?.name ?? '학생'} 생기부 심층 분석
+            {resolvedStudentName} 생기부 심층 분석
           </h1>
           <div style={{ fontSize: 15, color: T.textMuted }}>
             {[r.school, r.grade, r.targetDept && `희망 ${r.targetDept}`].filter(Boolean).join(' · ')}
@@ -1358,39 +1316,12 @@ export function Service3Segibu() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setShowGuide(true)} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>분석 가이드</button>
           <button onClick={() => setShowCriteria(true)} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>평가 기준</button>
-          <button onClick={handlePDF} disabled={isPrinting} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>
-            {isPrinting ? 'PDF 생성 중...' : 'PDF 저장'}
+          <button onClick={openPrintDocument} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>
+            PDF 저장
           </button>
-          <button onClick={() => window.print()} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>인쇄</button>
+          <button onClick={openPrintDocument} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>인쇄</button>
           <button onClick={handleNewAnalysis} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, background: T.primary, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: FONT }}>새 분석</button>
         </div>
-      </div>
-
-      {/* 역량 점수 카드 3개 + 종합 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-        <ScoreBadge score={r.scores.academic} label="학업역량" color={COMP_COLOR.academic} />
-        <ScoreBadge score={r.scores.career} label="진로역량" color={COMP_COLOR.career} />
-        <ScoreBadge score={r.scores.community} label="공동체역량" color={COMP_COLOR.community} />
-        <div style={{ background: T.primarySoft, border: `1px solid ${T.primaryBorder}`, borderRadius: 14, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: T.primary }} />
-          <div style={{ fontSize: 13, color: T.primary, fontWeight: 600, marginBottom: 6 }}>성적 종합 평균</div>
-          <div style={{ fontSize: 36, fontWeight: 800, color: T.primary, letterSpacing: '-0.04em', lineHeight: 1 }}>
-            {avgAll != null ? avgAll.toFixed(2) : '-'}
-          </div>
-          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>
-            {r.groupAverages.kems != null && `국영수사과 ${r.groupAverages.kems.toFixed(2)}`}
-          </div>
-        </div>
-      </div>
-
-      {/* 역량 요약 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-        {([['academic', '학업역량', COMP_COLOR.academic], ['career', '진로역량', COMP_COLOR.career], ['community', '공동체역량', COMP_COLOR.community]] as const).map(([key, label, color]) => (
-          <div key={key} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '16px 18px', borderLeft: `3px solid ${color}` }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color, letterSpacing: '0.04em', marginBottom: 6 }}>{label} 요약</div>
-            <div style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.65 }}>{r.summaryHighlights[key]}</div>
-          </div>
-        ))}
       </div>
 
       {/* 탭 */}
@@ -1480,11 +1411,11 @@ export function Service3Segibu() {
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
               {(['y1','y2','y3'] as const).map((y, i) => (
-                <button key={y} onClick={() => setYearTab(y)} style={{
-                  padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: yearTab === y ? 700 : 400,
-                  background: yearTab === y ? T.bgAlt : 'transparent',
-                  color: yearTab === y ? T.text : T.textSubtle,
-                  border: `1px solid ${yearTab === y ? T.borderStrong : 'transparent'}`, cursor: 'pointer', fontFamily: FONT,
+                <button key={y} onClick={() => setActivityYearTab(y)} style={{
+                  padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: activityYearTab === y ? 700 : 400,
+                  background: activityYearTab === y ? T.bgAlt : 'transparent',
+                  color: activityYearTab === y ? T.text : T.textSubtle,
+                  border: `1px solid ${activityYearTab === y ? T.borderStrong : 'transparent'}`, cursor: 'pointer', fontFamily: FONT,
                 }}>{i+1}학년</button>
               ))}
             </div>
@@ -1492,7 +1423,7 @@ export function Service3Segibu() {
               <PrivacyLockedRecord />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>역량 하이라이트</div>
-                <HighlightCard highlight={r.highlights.changche[activityCategory][yearTab]} />
+                <HighlightCard highlight={r.highlights.changche[activityCategory][activityYearTab]} />
               </div>
             </div>
           </div>
@@ -1512,11 +1443,11 @@ export function Service3Segibu() {
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
               {(['y1','y2','y3'] as const).map((y, i) => (
-                <button key={y} onClick={() => setYearTab(y)} style={{
-                  padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: yearTab === y ? 700 : 400,
-                  background: yearTab === y ? T.bgAlt : 'transparent',
-                  color: yearTab === y ? T.text : T.textSubtle,
-                  border: `1px solid ${yearTab === y ? T.borderStrong : 'transparent'}`, cursor: 'pointer', fontFamily: FONT,
+                <button key={y} onClick={() => setCurriculumYearTab(y)} style={{
+                  padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: curriculumYearTab === y ? 700 : 400,
+                  background: curriculumYearTab === y ? T.bgAlt : 'transparent',
+                  color: curriculumYearTab === y ? T.text : T.textSubtle,
+                  border: `1px solid ${curriculumYearTab === y ? T.borderStrong : 'transparent'}`, cursor: 'pointer', fontFamily: FONT,
                 }}>{i+1}학년</button>
               ))}
             </div>
@@ -1524,7 +1455,7 @@ export function Service3Segibu() {
               <PrivacyLockedRecord />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>역량 하이라이트</div>
-                <HighlightCard highlight={r.highlights.curriculum[curriculumKey][yearTab]} />
+                <HighlightCard highlight={r.highlights.curriculum[curriculumKey][curriculumYearTab]} />
               </div>
             </div>
           </div>
@@ -1534,11 +1465,11 @@ export function Service3Segibu() {
             <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 14 }}>행동특성 및 종합의견</div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
               {(['y1','y2','y3'] as const).map((y, i) => (
-                <button key={y} onClick={() => setYearTab(y)} style={{
-                  padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: yearTab === y ? 700 : 400,
-                  background: yearTab === y ? T.bgAlt : 'transparent',
-                  color: yearTab === y ? T.text : T.textSubtle,
-                  border: `1px solid ${yearTab === y ? T.borderStrong : 'transparent'}`, cursor: 'pointer', fontFamily: FONT,
+                <button key={y} onClick={() => setBehaviorYearTab(y)} style={{
+                  padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: behaviorYearTab === y ? 700 : 400,
+                  background: behaviorYearTab === y ? T.bgAlt : 'transparent',
+                  color: behaviorYearTab === y ? T.text : T.textSubtle,
+                  border: `1px solid ${behaviorYearTab === y ? T.borderStrong : 'transparent'}`, cursor: 'pointer', fontFamily: FONT,
                 }}>{i+1}학년</button>
               ))}
             </div>
@@ -1546,7 +1477,7 @@ export function Service3Segibu() {
               <PrivacyLockedRecord />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textSubtle, marginBottom: 6 }}>역량 하이라이트</div>
-                <HighlightCard highlight={r.highlights.behavior[yearTab]} />
+                <HighlightCard highlight={r.highlights.behavior[behaviorYearTab]} />
               </div>
             </div>
           </div>
