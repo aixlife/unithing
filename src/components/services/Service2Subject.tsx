@@ -9,6 +9,7 @@ import { UNIVERSITY_TIPS } from '@/data/universityData';
 import { SUBJECT_DETAILS } from '@/data/subjectDetails';
 import { useStudent } from '@/contexts/StudentContext';
 import { getPrimaryTargetPick, getUniversityPicks } from '@/types/student';
+import { PresentationText, stripPresentationMarkdown } from './PresentationText';
 import type { SubjectRecommendationPlan, UniversitySubjectRecord } from '@/types/subjects';
 
 type ParsedCurriculumPdf = {
@@ -270,9 +271,12 @@ export function Service2Subject() {
   };
   const resetSelection = () => {
     setSelectedMajor(null);
+    setSelectedField(null);
+    setSearchTerm('');
     setViewMode('subject');
     setActiveAreaTab(null);
     setSelectedSubjectName(null);
+    setSubjectMatches([]);
     setSubjectPlan(null);
     setSubjectPlanError(null);
   };
@@ -1216,27 +1220,30 @@ export function Service2Subject() {
                     </button>
                     {subjectPlanError && <div style={{ fontSize: 12, color: T.danger }}>{subjectPlanError}</div>}
                     {subjectPlan && (
-                      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 9 }}>
-                        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.55 }}>{subjectPlan.summary}</div>
+                      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 11 }}>
+                        <div style={{ borderRadius: 10, background: T.primarySoft, border: `1px solid ${T.primaryBorder}`, padding: '10px 12px' }}>
+                          <PresentationText value={subjectPlan.summary} fontSize={13.5} color={T.text} lineHeight={1.65} />
+                        </div>
                         {([
                           { label: '2학년', items: subjectPlan.grade2 },
                           { label: '3학년', items: subjectPlan.grade3 },
                         ] as const).map(section => (
                           <div key={section.label}>
-                            <div style={{ fontSize: 11, fontWeight: 850, color: T.primary, marginBottom: 5 }}>{section.label}</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 900, color: T.primary, marginBottom: 6 }}>{section.label}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                               {section.items.map((item, index) => (
-                                <div key={`${section.label}-${item.subject}-${index}`} style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.45 }}>
-                                  <strong style={{ color: T.text }}>{item.subject}</strong> — {item.reason}
+                                <div key={`${section.label}-${item.subject}-${index}`} style={{ borderRadius: 8, background: T.bg, border: `1px solid ${T.border}`, padding: '8px 10px' }}>
+                                  <div style={{ fontSize: 13, fontWeight: 850, color: T.text, marginBottom: 3 }}>{stripPresentationMarkdown(item.subject)}</div>
+                                  <PresentationText value={item.reason} fontSize={12.5} color={T.textMuted} lineHeight={1.55} />
                                 </div>
                               ))}
                             </div>
                           </div>
                         ))}
                         {subjectPlan.cautions.length > 0 && (
-                          <div style={{ background: T.accentSoft, borderRadius: 8, padding: '8px 10px' }}>
+                          <div style={{ background: T.accentSoft, borderRadius: 8, padding: '9px 11px' }}>
                             {subjectPlan.cautions.slice(0, 3).map((item, index) => (
-                              <div key={index} style={{ fontSize: 11, color: '#92400E', lineHeight: 1.45 }}>{item}</div>
+                              <PresentationText key={index} value={item} fontSize={12} color="#92400E" lineHeight={1.5} paragraphGap={5} />
                             ))}
                           </div>
                         )}

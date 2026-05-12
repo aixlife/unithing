@@ -361,13 +361,15 @@ function UniversityCard({
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
           {TARGET_PICK_SLOTS.map(({ slot, label }) => {
             const pickStyle = getBadgeStyle(label);
+            const pickKey = getTargetPickSavingKey(slot, univ);
             const isSaved = savedSlots.includes(slot);
-            const isSaving = savingPickKey === getTargetPickSavingKey(slot, univ);
+            const isSaving = savingPickKey === pickKey;
+            const isBusy = Boolean(savingPickKey);
             return (
               <button
                 key={slot}
                 onClick={() => onSavePick(slot, univ)}
-                disabled={disabled || isSaving}
+                disabled={disabled || isBusy}
                 title={`${label} 목표로 저장`}
                 style={{
                   display: 'inline-flex',
@@ -382,7 +384,8 @@ function UniversityCard({
                   fontSize: 11,
                   fontWeight: 800,
                   fontFamily: FONT,
-                  cursor: disabled || isSaving ? 'not-allowed' : 'pointer',
+                  cursor: disabled ? 'not-allowed' : isBusy ? 'wait' : 'pointer',
+                  opacity: isBusy && !isSaving ? 0.72 : 1,
                 }}
               >
                 <Save size={12} strokeWidth={2.4} />
@@ -986,7 +989,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
                   univ={univ}
                   myGrade={conversion.grade9}
                   onSavePick={saveTargetPick}
-                  disabled={!currentStudent || Boolean(savingPickKey)}
+                  disabled={!currentStudent}
                   savingPickKey={savingPickKey}
                   savedSlots={TARGET_PICK_SLOTS
                     .filter(({ slot }) => {
