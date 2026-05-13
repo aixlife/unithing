@@ -68,7 +68,7 @@ Production recommendation:
 - Keep reports in Supabase.
 - Do not store raw PDFs or unredacted student records in `error_reports`.
 - Use mail only as a notification copy, not as the source of truth.
-- Configure mail notification with `UNITHING_MAIL_WEBHOOK_URL`, `UNITHING_MAIL_WEBHOOK_SECRET`, and `UNITHING_MAIL_TO` only after the webhook destination is ready. The webhook must use HTTPS and verify the `X-Unithing-Signature` HMAC header.
+- Configure mail notification with `UNITHING_MAIL_TO` plus either `UNITHING_RESEND_API_KEY` or `UNITHING_MAIL_WEBHOOK_URL`/`UNITHING_MAIL_WEBHOOK_SECRET`. The webhook path must use HTTPS and verify the `X-Unithing-Signature` HMAC header.
 - Consider Supabase Pro when production data should have daily backups and support.
 
 ## Cost Guardrails To Add Next

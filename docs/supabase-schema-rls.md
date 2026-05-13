@@ -234,5 +234,6 @@ For the current production hardening baseline:
 - Confirm RLS is enabled on `error_reports`.
 - Configure `UNITHING_ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, and optional mail webhook variables in Vercel.
 - `ADMIN_SESSION_SECRET` must be a separate random value and must not reuse `NEXTAUTH_SECRET`.
-- Mail webhook variables are `UNITHING_MAIL_WEBHOOK_URL`, `UNITHING_MAIL_WEBHOOK_SECRET`, and `UNITHING_MAIL_TO`.
+- Mail variables are `UNITHING_MAIL_TO` plus either `UNITHING_MAIL_WEBHOOK_URL`/`UNITHING_MAIL_WEBHOOK_SECRET` or `UNITHING_RESEND_API_KEY`.
+- Optional sender variables are `UNITHING_MAIL_FROM` and `UNITHING_MAIL_REPLY_TO`.
 - Remove anon fallback after production service-role configuration is confirmed.

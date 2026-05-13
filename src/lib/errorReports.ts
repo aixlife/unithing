@@ -114,35 +114,65 @@ export function formatErrorReportForDeveloper(report: ErrorReportRow) {
 export async function notifyErrorReportByMail(report: ErrorReportRow) {
   const webhookUrl = process.env.UNITHING_MAIL_WEBHOOK_URL;
   const to = process.env.UNITHING_MAIL_TO;
-  if (!webhookUrl || !to) return { status: 'skipped', error: null };
-  const secret = process.env.UNITHING_MAIL_WEBHOOK_SECRET;
-  if (!secret) return { status: 'failed', error: 'UNITHING_MAIL_WEBHOOK_SECRET is missing' };
+  const resendApiKey = process.env.UNITHING_RESEND_API_KEY || process.env.RESEND_API_KEY;
+  if (!to) return { status: 'skipped', error: null };
 
   const subject = `[UNITHING 오류 보고] ${report.service_label || report.page_path || report.id}`;
   const text = formatErrorReportForDeveloper(report);
-  const body = JSON.stringify({ to, subject, text });
-  const signature = createHmac('sha256', secret).update(body).digest('hex');
 
-  try {
-    const url = new URL(webhookUrl);
-    if (url.protocol !== 'https:') {
-      return { status: 'failed', error: 'mail webhook must use https' };
-    }
+  if (webhookUrl) {
+    const secret = process.env.UNITHING_MAIL_WEBHOOK_SECRET;
+    if (!secret) return { status: 'failed', error: 'UNITHING_MAIL_WEBHOOK_SECRET is missing' };
+    const body = JSON.stringify({ to, subject, text });
+    const signature = createHmac('sha256', secret).update(body).digest('hex');
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Unithing-Signature': signature,
-      },
-      signal: AbortSignal.timeout(MAIL_WEBHOOK_TIMEOUT_MS),
-      body,
-    });
-    if (!res.ok) {
-      return { status: 'failed', error: `mail webhook ${res.status}` };
+    try {
+      const url = new URL(webhookUrl);
+      if (url.protocol !== 'https:') {
+        return { status: 'failed', error: 'mail webhook must use https' };
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Unithing-Signature': signature,
+        },
+        signal: AbortSignal.timeout(MAIL_WEBHOOK_TIMEOUT_MS),
+        body,
+      });
+      if (!res.ok) {
+        return { status: 'failed', error: `mail webhook ${res.status}` };
+      }
+      return { status: 'sent', error: null };
+    } catch (error) {
+      return { status: 'failed', error: redactText(error, 1000) };
     }
-    return { status: 'sent', error: null };
-  } catch (error) {
-    return { status: 'failed', error: redactText(error, 1000) };
   }
+
+  if (resendApiKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(MAIL_WEBHOOK_TIMEOUT_MS),
+        body: JSON.stringify({
+          from: process.env.UNITHING_MAIL_FROM || 'UNITHING <naminsoo@aixlife.co.kr>',
+          to,
+          reply_to: process.env.UNITHING_MAIL_REPLY_TO || 'naminsoo@aixlife.co.kr',
+          subject,
+          text,
+        }),
+      });
+      if (!res.ok) return { status: 'failed', error: `resend ${res.status}` };
+      return { status: 'sent', error: null };
+    } catch (error) {
+      return { status: 'failed', error: redactText(error, 1000) };
+    }
+  }
+
+  return { status: 'skipped', error: null };
 }
