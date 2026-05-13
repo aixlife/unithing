@@ -26,6 +26,48 @@ type StudentContextType = {
 };
 
 const StudentContext = createContext<StudentContextType | null>(null);
+const PENDING_SEGIBU_SAVE_KEY = 'unithing.pendingSegibuSaves.v1';
+
+type PendingSegibuSave = {
+  analysis: SegibuAnalysis;
+  error: string;
+  savedAt: string;
+};
+
+function readPendingSegibuSaves(): Record<string, PendingSegibuSave> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_SEGIBU_SAVE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, PendingSegibuSave>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function getPendingSegibuSave(studentId?: string | null): PendingSegibuSave | null {
+  if (!studentId) return null;
+  return readPendingSegibuSaves()[studentId] ?? null;
+}
+
+function setPendingSegibuSave(studentId: string, analysis: SegibuAnalysis, error: string) {
+  if (typeof window === 'undefined') return;
+  const storedAnalysis = sanitizeSegibuAnalysisForStorage(analysis);
+  if (!storedAnalysis) return;
+  const all = readPendingSegibuSaves();
+  all[studentId] = { analysis: storedAnalysis, error, savedAt: new Date().toISOString() };
+  window.sessionStorage.setItem(PENDING_SEGIBU_SAVE_KEY, JSON.stringify(all));
+}
+
+function removePendingSegibuSave(studentId?: string | null) {
+  if (!studentId || typeof window === 'undefined') return;
+  const all = readPendingSegibuSaves();
+  if (!all[studentId]) return;
+  delete all[studentId];
+  window.sessionStorage.setItem(PENDING_SEGIBU_SAVE_KEY, JSON.stringify(all));
+}
 
 export function StudentProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
@@ -36,11 +78,23 @@ export function StudentProvider({ children }: { children: ReactNode }) {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisSaveError, setAnalysisSaveError] = useState<string | null>(null);
   const analysisSaveErrorStudentIdRef = useRef<string | null>(null);
+  const analysisInFlightRef = useRef(false);
   const [analysisSaveLoading, setAnalysisSaveLoading] = useState(false);
 
   const setCurrentStudent = useCallback((s: Student | null) => {
     setCurrentStudentState(s);
     setAnalysisError(null);
+
+    const pendingSave = getPendingSegibuSave(s?.id);
+    const pendingAnalysis = normalizeSegibuAnalysis(pendingSave?.analysis);
+    if (s && pendingSave && pendingAnalysis) {
+      setManualAnalysis(pendingAnalysis);
+      setManualAnalysisStudentId(s.id);
+      setAnalysisSaveError(pendingSave.error || '이전 분석 결과 저장이 완료되지 않았습니다. 재분석하지 말고 저장만 다시 시도하세요.');
+      analysisSaveErrorStudentIdRef.current = s.id;
+      return;
+    }
+
     if (analysisSaveErrorStudentIdRef.current !== s?.id) {
       analysisSaveErrorStudentIdRef.current = null;
       setAnalysisSaveError(null);
@@ -73,12 +127,15 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     }
     const updated: Student = await patchRes.json();
+    removePendingSegibuSave(target.id);
     setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
     setCurrentStudentState(updated);
     return updated;
   }, []);
 
   const analyzeSegibu = async (input: File | string, studentOverride?: Student) => {
+    if (analysisInFlightRef.current) return;
+    analysisInFlightRef.current = true;
     setAnalysisLoading(true);
     setAnalysisError(null);
     setAnalysisSaveError(null);
@@ -117,13 +174,16 @@ export function StudentProvider({ children }: { children: ReactNode }) {
         try {
           await saveSegibuAnalysis(target, data);
         } catch (saveError) {
-          setAnalysisSaveError(saveError instanceof Error ? saveError.message : String(saveError));
+          const saveErrorMessage = saveError instanceof Error ? saveError.message : String(saveError);
+          setPendingSegibuSave(target.id, data, saveErrorMessage);
+          setAnalysisSaveError(saveErrorMessage);
           analysisSaveErrorStudentIdRef.current = target.id;
         }
       }
     } catch (e) {
       setAnalysisError(e instanceof Error ? e.message : String(e));
     } finally {
+      analysisInFlightRef.current = false;
       setAnalysisLoading(false);
     }
   };
@@ -154,7 +214,9 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       setManualAnalysis(null);
       setManualAnalysisStudentId(null);
     } catch (e) {
-      setAnalysisSaveError(e instanceof Error ? e.message : String(e));
+      const saveErrorMessage = e instanceof Error ? e.message : String(e);
+      setPendingSegibuSave(currentStudent.id, pendingAnalysis, saveErrorMessage);
+      setAnalysisSaveError(saveErrorMessage);
       analysisSaveErrorStudentIdRef.current = currentStudent.id;
     } finally {
       setAnalysisSaveLoading(false);
@@ -167,6 +229,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setAnalysisError(null);
     setAnalysisSaveError(null);
     analysisSaveErrorStudentIdRef.current = null;
+    removePendingSegibuSave(currentStudent?.id);
     if (!currentStudent) return;
     const patchRes = await fetch(`/api/students/${currentStudent.id}`, {
       method: 'PATCH',

@@ -178,6 +178,7 @@ export function Service2Subject() {
   const [subjectPlanLoading, setSubjectPlanLoading] = useState(false);
   const [subjectPlanError, setSubjectPlanError] = useState<string | null>(null);
   const curriculumFileRef = useRef<HTMLInputElement>(null);
+  const paidActionInFlightRef = useRef<Record<string, boolean>>({});
 
   const allMajors = useMemo(() => {
     return FIELD_DATA.flatMap(field => field.majors.map(major => ({ ...major, fieldName: field.name })));
@@ -491,46 +492,58 @@ export function Service2Subject() {
     setShowCustomForm(false);
   };
 
+  const runPaidAction = async (key: string, setLoading: (value: boolean) => void, action: () => Promise<void>) => {
+    if (paidActionInFlightRef.current[key]) return;
+    paidActionInFlightRef.current[key] = true;
+    setLoading(true);
+    try {
+      await action();
+    } finally {
+      paidActionInFlightRef.current[key] = false;
+      setLoading(false);
+    }
+  };
+
   const handleCurriculumPdf = async (file: File | null) => {
     if (!file) return;
     if (file.size > CURRICULUM_UPLOAD_LIMIT_BYTES) {
       setCurriculumParseMessage('PDF는 4MB 이하만 추출할 수 있습니다. 용량을 줄인 편제표 PDF로 다시 시도하세요.');
       return;
     }
-    setCurriculumParseLoading(true);
-    setCurriculumParseMessage(null);
-    setCurriculumParseNotes([]);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/parse/curriculum-pdf', { method: 'POST', body: form });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? '교육과정 편제표 추출 실패');
+    await runPaidAction('curriculum-pdf', setCurriculumParseLoading, async () => {
+      setCurriculumParseMessage(null);
+      setCurriculumParseNotes([]);
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/parse/curriculum-pdf', { method: 'POST', body: form });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? '교육과정 편제표 추출 실패');
+        }
+        const data = await res.json() as ParsedCurriculumPdf;
+        setTempMandatory({
+          '2-1': (data.mandatory['2-1'] ?? []).join(', '),
+          '2-2': (data.mandatory['2-2'] ?? []).join(', '),
+          '3-1': (data.mandatory['3-1'] ?? []).join(', '),
+          '3-2': (data.mandatory['3-2'] ?? []).join(', '),
+        });
+        setTempGroups(data.groups.length > 0 ? data.groups.map((group, index) => ({
+          id: Date.now() + index,
+          grade: group.grade === 3 ? 3 : 2,
+          semester: group.semester || '1·2학기',
+          credits: group.credits || 4,
+          selectCount: group.selectCount || 1,
+          subjects: group.subjects.join(', '),
+        })) : [{ id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }]);
+        setCurriculumParseNotes(data.notes ?? []);
+        setCurriculumParseMessage('PDF 추출값을 입력칸에 채웠습니다. 과목명·학점·택N을 확인한 뒤 적용하세요.');
+      } catch (error) {
+        setCurriculumParseMessage(error instanceof Error ? error.message : '교육과정 편제표 추출 실패');
+      } finally {
+        if (curriculumFileRef.current) curriculumFileRef.current.value = '';
       }
-      const data = await res.json() as ParsedCurriculumPdf;
-      setTempMandatory({
-        '2-1': (data.mandatory['2-1'] ?? []).join(', '),
-        '2-2': (data.mandatory['2-2'] ?? []).join(', '),
-        '3-1': (data.mandatory['3-1'] ?? []).join(', '),
-        '3-2': (data.mandatory['3-2'] ?? []).join(', '),
-      });
-      setTempGroups(data.groups.length > 0 ? data.groups.map((group, index) => ({
-        id: Date.now() + index,
-        grade: group.grade === 3 ? 3 : 2,
-        semester: group.semester || '1·2학기',
-        credits: group.credits || 4,
-        selectCount: group.selectCount || 1,
-        subjects: group.subjects.join(', '),
-      })) : [{ id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }]);
-      setCurriculumParseNotes(data.notes ?? []);
-      setCurriculumParseMessage('PDF 추출값을 입력칸에 채웠습니다. 과목명·학점·택N을 확인한 뒤 적용하세요.');
-    } catch (error) {
-      setCurriculumParseMessage(error instanceof Error ? error.message : '교육과정 편제표 추출 실패');
-    } finally {
-      setCurriculumParseLoading(false);
-      if (curriculumFileRef.current) curriculumFileRef.current.value = '';
-    }
+    });
   };
 
   const fetchSubjectMatches = async () => {
@@ -579,29 +592,28 @@ export function Service2Subject() {
       note: tip.note ?? '',
     }));
 
-    setSubjectPlanLoading(true);
-    setSubjectPlanError(null);
-    try {
-      const res = await fetch('/api/recommend/subjects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetUniversity: subjectTargetUniversity,
-          targetMajor: subjectTargetMajor,
-          selectedMajor: selectedMajor.name,
-          selectedMajorSubjects: selectedMajor.recommendedSubjects,
-          universityRecords: records,
-          weaknesses: subjectWeaknesses,
-        }),
-      });
-      if (!res.ok) throw new Error('추천 설계 실패');
-      const data: { plan: SubjectRecommendationPlan } = await res.json();
-      setSubjectPlan(data.plan);
-    } catch {
-      setSubjectPlanError('과목 설계를 생성하지 못했습니다.');
-    } finally {
-      setSubjectPlanLoading(false);
-    }
+    await runPaidAction('subject-plan', setSubjectPlanLoading, async () => {
+      setSubjectPlanError(null);
+      try {
+        const res = await fetch('/api/recommend/subjects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetUniversity: subjectTargetUniversity,
+            targetMajor: subjectTargetMajor,
+            selectedMajor: selectedMajor.name,
+            selectedMajorSubjects: selectedMajor.recommendedSubjects,
+            universityRecords: records,
+            weaknesses: subjectWeaknesses,
+          }),
+        });
+        if (!res.ok) throw new Error('추천 설계 실패');
+        const data: { plan: SubjectRecommendationPlan } = await res.json();
+        setSubjectPlan(data.plan);
+      } catch {
+        setSubjectPlanError('과목 설계를 생성하지 못했습니다.');
+      }
+    });
   };
 
   // ---- RENDER ----

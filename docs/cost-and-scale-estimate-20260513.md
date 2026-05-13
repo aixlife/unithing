@@ -56,7 +56,8 @@ Rough usage mix:
 - 40% of active teacher-days complete a seteuk helper flow.
 - 30% use AI subject recommendation.
 - 5 curriculum PDF parses per weekday.
-- Exchange estimate: `$1 = ₩1,460`.
+- Weekday estimate: 260 weekdays/year divided by 12 = about 21.7 weekdays/month.
+- Exchange estimate: `$1 = ₩1,460`, rounded from public USD/KRW mid-market snapshots around May 7, 2026. Use USD as the primary budget number and refresh KRW before quoting externally.
 
 | Cost item | Monthly USD | Monthly KRW |
 | --- | ---: | ---: |

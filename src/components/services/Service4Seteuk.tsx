@@ -1130,6 +1130,8 @@ export function Service4Seteuk() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [subjectHints, setSubjectHints] = useState<string[]>([]);
   const restoredRef = useRef(false);
+  const paidActionInFlightRef = useRef<Record<string, boolean>>({});
+  const stepActionInFlightRef = useRef(false);
 
   const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
   const targetPick = useMemo(() => getPrimaryTargetPick(getUniversityPicks(naesinData)), [naesinData]);
@@ -1239,51 +1241,64 @@ export function Service4Seteuk() {
     );
   };
 
-  async function fetchTopics(majorVal: string, interestVal: string, activitiesVal: string) {
-    setTopicsLoading(true);
+  async function runPaidAction(key: string, setLoading: (value: boolean) => void, action: () => Promise<void>) {
+    if (paidActionInFlightRef.current[key]) return false;
+    paidActionInFlightRef.current[key] = true;
+    setLoading(true);
     try {
-      const res = await fetch(`/api/analyze/seteuk?action=topics&major=${encodeURIComponent(majorVal)}&interest=${encodeURIComponent(interestVal)}&activities=${encodeURIComponent(activitiesVal)}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setTopics(data.topics ?? []);
-    } catch { /* stay on loading=false */ }
-    finally { setTopicsLoading(false); }
+      await action();
+      return true;
+    } finally {
+      paidActionInFlightRef.current[key] = false;
+      setLoading(false);
+    }
+  }
+
+  async function fetchTopics(majorVal: string, interestVal: string, activitiesVal: string) {
+    await runPaidAction('topics', setTopicsLoading, async () => {
+      try {
+        const res = await fetch(`/api/analyze/seteuk?action=topics&major=${encodeURIComponent(majorVal)}&interest=${encodeURIComponent(interestVal)}&activities=${encodeURIComponent(activitiesVal)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setTopics(data.topics ?? []);
+      } catch { /* stay on loading=false */ }
+    });
   }
 
   async function fetchMotivations(topic: string) {
-    setMotivationsLoading(true);
-    try {
-      const res = await fetch(`/api/analyze/seteuk?action=motivations&topic=${encodeURIComponent(topic)}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setMotivations(data.motivations ?? []);
-      setSelectedMotivation('');
-    } catch { /* noop */ }
-    finally { setMotivationsLoading(false); }
+    await runPaidAction('motivations', setMotivationsLoading, async () => {
+      try {
+        const res = await fetch(`/api/analyze/seteuk?action=motivations&topic=${encodeURIComponent(topic)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setMotivations(data.motivations ?? []);
+        setSelectedMotivation('');
+      } catch { /* noop */ }
+    });
   }
 
   async function fetchCompetencies(topic: string) {
-    setCompetenciesLoading(true);
-    try {
-      const res = await fetch(`/api/analyze/seteuk?action=competencies&topic=${encodeURIComponent(topic)}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setCompetencies(data.competencies ?? []);
-      setSelectedCompetencies([]);
-    } catch { /* noop */ }
-    finally { setCompetenciesLoading(false); }
+    await runPaidAction('competencies', setCompetenciesLoading, async () => {
+      try {
+        const res = await fetch(`/api/analyze/seteuk?action=competencies&topic=${encodeURIComponent(topic)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setCompetencies(data.competencies ?? []);
+        setSelectedCompetencies([]);
+      } catch { /* noop */ }
+    });
   }
 
   async function fetchFollowUps(topic: string) {
-    setFollowUpsLoading(true);
-    try {
-      const res = await fetch(`/api/analyze/seteuk?action=followups&topic=${encodeURIComponent(topic)}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setFollowUps(data.followUps ?? []);
-      setSelectedFollowUp('');
-    } catch { /* noop */ }
-    finally { setFollowUpsLoading(false); }
+    await runPaidAction('followups', setFollowUpsLoading, async () => {
+      try {
+        const res = await fetch(`/api/analyze/seteuk?action=followups&topic=${encodeURIComponent(topic)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setFollowUps(data.followUps ?? []);
+        setSelectedFollowUp('');
+      } catch { /* noop */ }
+    });
   }
 
   async function saveSeteukResult(nextDraft: string, nextPlan: { plan: PlanItem[] } | null) {
@@ -1330,58 +1345,62 @@ export function Service4Seteuk() {
   }
 
   async function fetchFinal() {
-    setFinalLoading(true);
-    setFinalError(null);
-    setSaveMessage(null);
-    try {
-      const res = await fetch('/api/analyze/seteuk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          major: effectiveMajor, interest, topic: selectedTopic,
-          motivation: selectedMotivation,
-          competencies: selectedCompetencies,
-          followUp: selectedFollowUp,
-          activities,
-          targetUniversity: targetPick?.name,
-          targetDept: targetPick?.dept || effectiveMajor,
-          weaknesses: readinessWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`),
-          subjectHints,
-        }),
-      });
-      if (!res.ok) throw new Error('서버 오류');
-      const data = await res.json();
-      const nextDraft = data.draft ?? '';
-      const nextPlan = data.plan ?? null;
-      setDraft(nextDraft);
-      setPlan(nextPlan);
-      await saveSeteukResult(nextDraft, nextPlan);
-    } catch {
-      setFinalError('세특 생성 실패. 다시 시도해주세요.');
-    } finally {
-      setFinalLoading(false);
-    }
+    await runPaidAction('final', setFinalLoading, async () => {
+      setFinalError(null);
+      setSaveMessage(null);
+      try {
+        const res = await fetch('/api/analyze/seteuk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            major: effectiveMajor, interest, topic: selectedTopic,
+            motivation: selectedMotivation,
+            competencies: selectedCompetencies,
+            followUp: selectedFollowUp,
+            activities,
+            targetUniversity: targetPick?.name,
+            targetDept: targetPick?.dept || effectiveMajor,
+            weaknesses: readinessWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`),
+            subjectHints,
+          }),
+        });
+        if (!res.ok) throw new Error('서버 오류');
+        const data = await res.json();
+        const nextDraft = data.draft ?? '';
+        const nextPlan = data.plan ?? null;
+        setDraft(nextDraft);
+        setPlan(nextPlan);
+        await saveSeteukResult(nextDraft, nextPlan);
+      } catch {
+        setFinalError('세특 생성 실패. 다시 시도해주세요.');
+      }
+    });
   }
 
   const isStepBusy = topicsLoading || motivationsLoading || competenciesLoading || followUpsLoading || finalLoading;
 
   const handleNext = async () => {
-    if (isStepBusy) return;
-    if (phase === 1) {
-      if (topics.length === 0) await fetchTopics(effectiveMajor, interest, activities);
-      setPhase(2);
-    } else if (phase === 2) {
-      if (motivations.length === 0) await fetchMotivations(selectedTopic);
-      setPhase(3);
-    } else if (phase === 3) {
-      if (competencies.length === 0) await fetchCompetencies(selectedTopic);
-      setPhase(4);
-    } else if (phase === 4) {
-      if (followUps.length === 0) await fetchFollowUps(selectedTopic);
-      setPhase(5);
-    } else if (phase === 5) {
-      await fetchFinal();
-      setPhase(6);
+    if (isStepBusy || stepActionInFlightRef.current) return;
+    stepActionInFlightRef.current = true;
+    try {
+      if (phase === 1) {
+        if (topics.length === 0) await fetchTopics(effectiveMajor, interest, activities);
+        setPhase(2);
+      } else if (phase === 2) {
+        if (motivations.length === 0) await fetchMotivations(selectedTopic);
+        setPhase(3);
+      } else if (phase === 3) {
+        if (competencies.length === 0) await fetchCompetencies(selectedTopic);
+        setPhase(4);
+      } else if (phase === 4) {
+        if (followUps.length === 0) await fetchFollowUps(selectedTopic);
+        setPhase(5);
+      } else if (phase === 5) {
+        await fetchFinal();
+        setPhase(6);
+      }
+    } finally {
+      stepActionInFlightRef.current = false;
     }
   };
 
