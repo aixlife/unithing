@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { Student } from '@/lib/supabase';
 import { normalizeSegibuAnalysis, sanitizeSegibuAnalysisForStorage } from '@/lib/segibuAnalysis';
 import { SegibuAnalysis } from '@/types/analysis';
@@ -35,12 +35,16 @@ export function StudentProvider({ children }: { children: ReactNode }) {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisSaveError, setAnalysisSaveError] = useState<string | null>(null);
+  const analysisSaveErrorStudentIdRef = useRef<string | null>(null);
   const [analysisSaveLoading, setAnalysisSaveLoading] = useState(false);
 
   const setCurrentStudent = useCallback((s: Student | null) => {
     setCurrentStudentState(s);
     setAnalysisError(null);
-    setAnalysisSaveError(null);
+    if (analysisSaveErrorStudentIdRef.current !== s?.id) {
+      analysisSaveErrorStudentIdRef.current = null;
+      setAnalysisSaveError(null);
+    }
   }, []);
 
   const segibuAnalysis = useMemo(() => {
@@ -78,6 +82,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setAnalysisLoading(true);
     setAnalysisError(null);
     setAnalysisSaveError(null);
+    analysisSaveErrorStudentIdRef.current = null;
     try {
       let res: Response;
       if (typeof input === 'string') {
@@ -113,6 +118,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
           await saveSegibuAnalysis(target, data);
         } catch (saveError) {
           setAnalysisSaveError(saveError instanceof Error ? saveError.message : String(saveError));
+          analysisSaveErrorStudentIdRef.current = target.id;
         }
       }
     } catch (e) {
@@ -125,6 +131,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
   const retrySaveSegibuAnalysis = async () => {
     if (!currentStudent) {
       setAnalysisSaveError('학생을 선택한 뒤 저장을 다시 시도하세요.');
+      analysisSaveErrorStudentIdRef.current = null;
       return;
     }
 
@@ -135,17 +142,20 @@ export function StudentProvider({ children }: { children: ReactNode }) {
 
     if (!pendingAnalysis) {
       setAnalysisSaveError('다시 저장할 분석 결과를 찾지 못했습니다. 분석이 완료된 화면에서 다시 시도하세요.');
+      analysisSaveErrorStudentIdRef.current = currentStudent.id;
       return;
     }
 
     setAnalysisSaveLoading(true);
     setAnalysisSaveError(null);
+    analysisSaveErrorStudentIdRef.current = null;
     try {
       await saveSegibuAnalysis(currentStudent, pendingAnalysis);
       setManualAnalysis(null);
       setManualAnalysisStudentId(null);
     } catch (e) {
       setAnalysisSaveError(e instanceof Error ? e.message : String(e));
+      analysisSaveErrorStudentIdRef.current = currentStudent.id;
     } finally {
       setAnalysisSaveLoading(false);
     }
@@ -156,6 +166,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setManualAnalysisStudentId(null);
     setAnalysisError(null);
     setAnalysisSaveError(null);
+    analysisSaveErrorStudentIdRef.current = null;
     if (!currentStudent) return;
     const patchRes = await fetch(`/api/students/${currentStudent.id}`, {
       method: 'PATCH',
