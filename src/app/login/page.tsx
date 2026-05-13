@@ -1,5 +1,6 @@
 'use client';
 import { signIn } from 'next-auth/react';
+import { Footer } from '@/components/layout/Footer';
 
 function GoogleIcon() {
   return (
@@ -34,77 +35,85 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: '100vh', background: '#F4F6F8',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 40,
+      display: 'flex', flexDirection: 'column',
       fontFamily: "'Pretendard Variable', Pretendard, -apple-system, sans-serif",
     }}>
-      <div style={{
-        width: '100%', maxWidth: 420,
-        background: '#fff', borderRadius: 20, padding: '44px 44px 36px',
-        border: '1px solid #E5E8EB', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      <main style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
       }}>
-        <div style={{ marginBottom: 36 }}>
-          <UnithingLogo size={44} />
-          <div style={{
-            fontSize: 24, fontWeight: 800, color: '#191F28',
-            letterSpacing: '-0.035em', marginTop: 20, lineHeight: 1.25,
-          }}>
-            생기부, AI가 분석해<br/>진학 준비를 정리해드려요.
-          </div>
-          <div style={{
-            fontSize: 14, color: '#4E5968', fontWeight: 500,
-            marginTop: 10, letterSpacing: '-0.01em', lineHeight: 1.55,
-          }}>
-            로그인하고 무료로 시작하세요.
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={() => signIn('google', { callbackUrl: '/dashboard' })} style={{
-            height: 52, borderRadius: 10,
-            background: '#191F28', color: '#fff', border: 'none',
-            fontSize: 15, fontWeight: 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            letterSpacing: '-0.01em', cursor: 'pointer', width: '100%',
-          }}>
-            <GoogleIcon />
-            Google로 시작하기
-          </button>
-
-          {/* Kakao */}
-          <button style={{
-            height: 52, borderRadius: 10,
-            background: '#FEE500', color: '#181600',
-            border: 'none', fontSize: 15, fontWeight: 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            cursor: 'pointer', letterSpacing: '-0.01em',
-          }}>
-            카카오로 시작하기
-          </button>
-        </div>
-
         <div style={{
-          marginTop: 28, padding: '14px 16px', borderRadius: 10,
-          background: '#EFF1F4', border: '1px solid #E5E8EB',
+          width: '100%', maxWidth: 420,
+          background: '#fff', borderRadius: 20, padding: '44px 44px 36px',
+          border: '1px solid #E5E8EB', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#191F28', marginBottom: 4, letterSpacing: '-0.01em' }}>
-            처음 오셨나요?
+          <div style={{ marginBottom: 36 }}>
+            <UnithingLogo size={44} />
+            <div style={{
+              fontSize: 24, fontWeight: 800, color: '#191F28',
+              letterSpacing: '-0.035em', marginTop: 20, lineHeight: 1.25,
+            }}>
+              생기부, AI가 분석해<br/>진학 준비를 정리해드려요.
+            </div>
+            <div style={{
+              fontSize: 14, color: '#4E5968', fontWeight: 500,
+              marginTop: 10, letterSpacing: '-0.01em', lineHeight: 1.55,
+            }}>
+              로그인하고 무료로 시작하세요.
+            </div>
           </div>
-          <div style={{ fontSize: 12.5, color: '#4E5968', lineHeight: 1.6 }}>
-            별도 가입 절차 없이 소셜 계정으로 바로 시작할 수 있어요. 모든 기능 무료입니다.
-          </div>
-        </div>
 
-        <div style={{
-          marginTop: 28, textAlign: 'center',
-          fontSize: 11.5, color: '#8B95A1', lineHeight: 1.7, letterSpacing: '-0.01em',
-        }}>
-          가입 시{' '}
-          <a style={{ color: '#4E5968', textDecoration: 'underline', cursor: 'pointer' }}>서비스 이용약관</a>과{' '}
-          <a style={{ color: '#4E5968', textDecoration: 'underline', cursor: 'pointer' }}>개인정보처리방침</a>에 동의하게 됩니다.<br/>
-          운영: 캠퍼스멘토
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => signIn('google', { callbackUrl: '/dashboard' })} style={{
+              height: 52, borderRadius: 10,
+              background: '#191F28', color: '#fff', border: 'none',
+              fontSize: 15, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              letterSpacing: '-0.01em', cursor: 'pointer', width: '100%',
+            }}>
+              <GoogleIcon />
+              Google로 시작하기
+            </button>
+
+            {/* Kakao */}
+            <button style={{
+              height: 52, borderRadius: 10,
+              background: '#FEE500', color: '#181600',
+              border: 'none', fontSize: 15, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              cursor: 'pointer', letterSpacing: '-0.01em',
+            }}>
+              카카오로 시작하기
+            </button>
+          </div>
+
+          <div style={{
+            marginTop: 28, padding: '14px 16px', borderRadius: 10,
+            background: '#EFF1F4', border: '1px solid #E5E8EB',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#191F28', marginBottom: 4, letterSpacing: '-0.01em' }}>
+              처음 오셨나요?
+            </div>
+            <div style={{ fontSize: 12.5, color: '#4E5968', lineHeight: 1.6 }}>
+              별도 가입 절차 없이 소셜 계정으로 바로 시작할 수 있어요. 모든 기능 무료입니다.
+            </div>
+          </div>
+
+          <div style={{
+            marginTop: 28, textAlign: 'center',
+            fontSize: 11.5, color: '#8B95A1', lineHeight: 1.7, letterSpacing: '-0.01em',
+          }}>
+            가입 시{' '}
+            <a style={{ color: '#4E5968', textDecoration: 'underline', cursor: 'pointer' }}>서비스 이용약관</a>과{' '}
+            <a style={{ color: '#4E5968', textDecoration: 'underline', cursor: 'pointer' }}>개인정보처리방침</a>에 동의하게 됩니다.<br/>
+            운영: 캠퍼스멘토
+          </div>
         </div>
-      </div>
+      </main>
+      <Footer showErrorReport={false} />
     </div>
   );
 }

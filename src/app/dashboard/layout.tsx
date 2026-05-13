@@ -1,6 +1,7 @@
 import { Header } from '@/components/layout/Header';
 import { BookSidebar } from '@/components/layout/BookSidebar';
 import { AdSidebarRight } from '@/components/layout/AdSidebarRight';
+import { Footer } from '@/components/layout/Footer';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
         <AdSidebarRight />
       </div>
+      <Footer />
     </div>
   );
 }
