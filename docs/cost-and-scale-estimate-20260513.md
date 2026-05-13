@@ -44,6 +44,37 @@ Assumption: 100 teachers/day, 30 active days/month = 3,000 teacher-days.
 
 Operational recommendation: start with a monthly Gemini guardrail around `$150-$250`, then replace estimates with actual token usage logs after 1-2 weeks.
 
+## Weekday 100-User Operating Estimate
+
+Assumption: 100 active teachers on weekdays only, about 21.7 weekdays/month = about 2,170 active teacher-days/month.
+
+This reflects the current guardrail direction: student record analysis is treated as one saved analysis per student, failed saves retry storage only, and saved results do not show a casual reanalysis button.
+
+Rough usage mix:
+
+- 1 student record analysis per active teacher-day.
+- 40% of active teacher-days complete a seteuk helper flow.
+- 30% use AI subject recommendation.
+- 5 curriculum PDF parses per weekday.
+- Exchange estimate: `$1 = ₩1,460`.
+
+| Cost item | Monthly USD | Monthly KRW |
+| --- | ---: | ---: |
+| Gemini API, conservative-low | `$50` | `₩73,000` |
+| Gemini API, expected | `$125` | `₩183,000` |
+| Gemini API, busy/high | `$200` | `₩292,000` |
+| Vercel Pro, 1 developer seat | `$20` | `₩29,000` |
+| Supabase Pro, optional production baseline | `$25` | `₩37,000` |
+
+Expected monthly operating budget:
+
+- Vercel Pro + Gemini: about `$145/mo`, roughly `₩210,000/mo`.
+- Vercel Pro + Supabase Pro + Gemini: about `$170/mo`, roughly `₩250,000/mo`.
+- Practical budget line with buffer: `₩300,000/mo`.
+- Recommended alert ceiling while piloting: `₩400,000/mo`.
+
+If teachers analyze more than one student per day, multiply only the Gemini student-analysis portion. For example, 2 student analyses per active teacher-day adds roughly another `$110-$125/mo` expected, or about `₩160,000-₩183,000/mo`.
+
 ## Vercel Suitability For 100+ Teachers/Day
 
 Vercel Hobby included usage currently lists 1,000,000 function invocations, 100 GB-hours function duration, 100 GB Fast Data Transfer, 4 CPU-hours active CPU, and 360 GB-hours provisioned memory. It also states Hobby is for non-commercial personal use and that exceeding included usage can pause access until the period resets.
