@@ -1193,7 +1193,7 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
         AI 심층 분석 시작
       </button>
       <div style={{ marginTop: 8, fontSize: 12, color: T.textSubtle, lineHeight: 1.5, textAlign: 'center' }}>
-        분석 시작 시 Gemini 호출 1회가 사용됩니다. 실패 시 같은 파일을 바로 반복 제출하지 말고 오류 내용을 먼저 확인하세요.
+        분석은 학생 1명당 1회 저장을 기준으로 진행됩니다. 결과가 생성되지 않은 오류에서만 다시 시도하고, 저장 실패 시에는 재분석이 아니라 저장만 다시 시도하세요.
       </div>
     </div>
   );
@@ -1201,7 +1201,16 @@ function UploadScreen({ currentStudentName, onAnalyze, error }: {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export function Service3Segibu() {
-  const { segibuAnalysis, analyzeSegibu, clearSegibuAnalysis, analysisLoading, analysisError, currentStudent } = useStudent();
+  const {
+    segibuAnalysis,
+    analyzeSegibu,
+    retrySaveSegibuAnalysis,
+    analysisLoading,
+    analysisError,
+    analysisSaveError,
+    analysisSaveLoading,
+    currentStudent,
+  } = useStudent();
   const [tab, setTab] = useState<'summary' | 'grades' | 'activities'>('summary');
   const [activityCategory, setActivityCategory] = useState<'individual' | 'club' | 'career_act'>('individual');
   const [curriculumKey, setCurriculumKey] = useState<'korean' | 'math' | 'english' | 'social' | 'science' | 'liberal' | 'arts_phys'>('korean');
@@ -1216,11 +1225,6 @@ export function Service3Segibu() {
     setLastFileName(typeof input === 'string' ? '텍스트 입력' : input.name);
     analyzeSegibu(input);
   }, [analyzeSegibu]);
-
-  const handleNewAnalysis = () => {
-    if (!confirm('현재 저장된 상담 요약 분석을 지우고 새 분석을 시작할까요?')) return;
-    void clearSegibuAnalysis();
-  };
 
   if (analysisLoading) return <LoadingScreen fileName={lastFileName ?? undefined} />;
   if (!segibuAnalysis) return <UploadScreen currentStudentName={currentStudent?.name} onAnalyze={handleAnalyze} error={analysisError} />;
@@ -1249,9 +1253,33 @@ export function Service3Segibu() {
             PDF 저장
           </button>
           <button onClick={openPrintDocument} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textMuted, border: `1px solid ${T.borderStrong}`, cursor: 'pointer', fontFamily: FONT }}>인쇄</button>
-          <button onClick={handleNewAnalysis} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, background: T.primary, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: FONT }}>새 분석</button>
         </div>
       </div>
+
+      {analysisSaveError && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 14px', borderRadius: 12, background: T.warningSoft,
+          border: '1px solid #FCD34D', color: '#92400E', flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: 13, lineHeight: 1.55, fontWeight: 650 }}>
+            분석 결과는 생성되었지만 학생별 저장에 실패했습니다. 비용이 다시 발생하지 않도록 재분석하지 말고 저장만 다시 시도하세요.
+            <span style={{ display: 'block', fontWeight: 500, marginTop: 2 }}>{analysisSaveError}</span>
+          </div>
+          <button
+            onClick={() => void retrySaveSegibuAnalysis()}
+            disabled={analysisSaveLoading}
+            style={{
+              height: 34, padding: '0 12px', borderRadius: 8, border: 'none',
+              background: analysisSaveLoading ? '#FBBF24' : '#D97706',
+              color: '#fff', fontSize: 13, fontWeight: 800,
+              cursor: analysisSaveLoading ? 'wait' : 'pointer', fontFamily: FONT,
+            }}
+          >
+            {analysisSaveLoading ? '저장 중...' : '결과 저장 다시 시도'}
+          </button>
+        </div>
+      )}
 
       {/* 탭 */}
       <div style={{ display: 'flex', borderBottom: `2px solid ${T.border}`, gap: 0 }}>

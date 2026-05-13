@@ -18,8 +18,11 @@ type StudentContextType = {
   segibuAnalysis: SegibuAnalysis | null;
   analyzeSegibu: (input: File | string, studentOverride?: Student) => Promise<void>;
   clearSegibuAnalysis: () => Promise<void>;
+  retrySaveSegibuAnalysis: () => Promise<void>;
   analysisLoading: boolean;
   analysisError: string | null;
+  analysisSaveError: string | null;
+  analysisSaveLoading: boolean;
 };
 
 const StudentContext = createContext<StudentContextType | null>(null);
@@ -31,10 +34,13 @@ export function StudentProvider({ children }: { children: ReactNode }) {
   const [manualAnalysisStudentId, setManualAnalysisStudentId] = useState<string | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisSaveError, setAnalysisSaveError] = useState<string | null>(null);
+  const [analysisSaveLoading, setAnalysisSaveLoading] = useState(false);
 
   const setCurrentStudent = useCallback((s: Student | null) => {
     setCurrentStudentState(s);
     setAnalysisError(null);
+    setAnalysisSaveError(null);
   }, []);
 
   const segibuAnalysis = useMemo(() => {
@@ -45,9 +51,33 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     return normalizeSegibuAnalysis(raw);
   }, [currentStudent, manualAnalysis, manualAnalysisStudentId]);
 
+  const saveSegibuAnalysis = useCallback(async (target: Student, data: SegibuAnalysis) => {
+    const storedAnalysis = sanitizeSegibuAnalysisForStorage(data);
+    const patchRes = await fetch(`/api/students/${target.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ segibu_analysis: storedAnalysis }),
+    });
+    if (!patchRes.ok) {
+      let message = '분석 결과 저장 실패';
+      try {
+        const payload = await patchRes.json();
+        if (typeof payload?.error === 'string') message = payload.error;
+      } catch {
+        message = `분석 결과 저장 실패 (${patchRes.status})`;
+      }
+      throw new Error(message);
+    }
+    const updated: Student = await patchRes.json();
+    setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
+    setCurrentStudentState(updated);
+    return updated;
+  }, []);
+
   const analyzeSegibu = async (input: File | string, studentOverride?: Student) => {
     setAnalysisLoading(true);
     setAnalysisError(null);
+    setAnalysisSaveError(null);
     try {
       let res: Response;
       if (typeof input === 'string') {
@@ -79,16 +109,10 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       setManualAnalysis(data);
       setManualAnalysisStudentId(target?.id ?? null);
       if (target) {
-        const storedAnalysis = sanitizeSegibuAnalysisForStorage(data);
-        const patchRes = await fetch(`/api/students/${target.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ segibu_analysis: storedAnalysis }),
-        });
-        if (patchRes.ok) {
-          const updated: Student = await patchRes.json();
-          setStudents(prev => prev.map(s => s.id === updated.id ? updated : s));
-          setCurrentStudentState(updated);
+        try {
+          await saveSegibuAnalysis(target, data);
+        } catch (saveError) {
+          setAnalysisSaveError(saveError instanceof Error ? saveError.message : String(saveError));
         }
       }
     } catch (e) {
@@ -98,10 +122,40 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const retrySaveSegibuAnalysis = async () => {
+    if (!currentStudent) {
+      setAnalysisSaveError('학생을 선택한 뒤 저장을 다시 시도하세요.');
+      return;
+    }
+
+    const pendingAnalysis =
+      manualAnalysis && (manualAnalysisStudentId ? manualAnalysisStudentId === currentStudent.id : true)
+        ? manualAnalysis
+        : normalizeSegibuAnalysis(currentStudent.segibu_analysis);
+
+    if (!pendingAnalysis) {
+      setAnalysisSaveError('다시 저장할 분석 결과를 찾지 못했습니다. 분석이 완료된 화면에서 다시 시도하세요.');
+      return;
+    }
+
+    setAnalysisSaveLoading(true);
+    setAnalysisSaveError(null);
+    try {
+      await saveSegibuAnalysis(currentStudent, pendingAnalysis);
+      setManualAnalysis(null);
+      setManualAnalysisStudentId(null);
+    } catch (e) {
+      setAnalysisSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAnalysisSaveLoading(false);
+    }
+  };
+
   const clearSegibuAnalysis = async () => {
     setManualAnalysis(null);
     setManualAnalysisStudentId(null);
     setAnalysisError(null);
+    setAnalysisSaveError(null);
     if (!currentStudent) return;
     const patchRes = await fetch(`/api/students/${currentStudent.id}`, {
       method: 'PATCH',
@@ -181,7 +235,8 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     <StudentContext.Provider value={{
       students, currentStudent, setCurrentStudent, loadStudents,
       addStudent, updateStudent, deleteStudent,
-      segibuAnalysis, analyzeSegibu, clearSegibuAnalysis, analysisLoading, analysisError,
+      segibuAnalysis, analyzeSegibu, clearSegibuAnalysis, retrySaveSegibuAnalysis,
+      analysisLoading, analysisError, analysisSaveError, analysisSaveLoading,
     }}>
       {children}
     </StudentContext.Provider>

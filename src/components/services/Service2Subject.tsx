@@ -1218,6 +1218,9 @@ export function Service2Subject() {
                     >
                       {subjectPlanLoading ? '설계 중...' : 'AI 과목 설계'}
                     </button>
+                    <div style={{ fontSize: 11.5, color: T.textSubtle, lineHeight: 1.45, textAlign: 'center' }}>
+                      AI 과목 설계에는 API 비용이 발생할 수 있습니다. 목표 대학·학과를 확인한 뒤 실행하세요.
+                    </div>
                     {subjectPlanError && <div style={{ fontSize: 12, color: T.danger }}>{subjectPlanError}</div>}
                     {subjectPlan && (
                       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 11 }}>
@@ -1665,6 +1668,9 @@ export function Service2Subject() {
                 >
                   {curriculumParseLoading ? '추출 중...' : 'PDF로 불러오기'}
                 </button>
+                <div style={{ marginTop: 7, fontSize: 12, color: T.textSubtle, lineHeight: 1.45 }}>
+                  PDF 추출에는 AI 비용이 발생할 수 있습니다. 학교 공개 편제표 파일만 업로드하고, 추출 후 반드시 검수하세요.
+                </div>
                 {curriculumParseMessage && (
                   <div style={{ marginTop: 10, fontSize: 12.5, color: curriculumParseMessage.includes('실패') ? T.danger : T.primary, lineHeight: 1.55, fontWeight: 700 }}>
                     {curriculumParseMessage}

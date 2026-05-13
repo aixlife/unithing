@@ -408,22 +408,51 @@ function PrimaryActionButton({
   );
 }
 
+function CostHint({
+  children,
+  align = 'left',
+  style,
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'center' | 'right';
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div style={{
+      marginTop: 8,
+      fontSize: 12,
+      color: T.textSubtle,
+      lineHeight: 1.45,
+      textAlign: align,
+      fontFamily: FONT,
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
 function RefreshBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        padding: '6px 12px', borderRadius: 8,
-        background: T.indigoSoft, border: `1px solid ${T.indigoBorder}`,
-        color: T.indigo, fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-        fontFamily: FONT, opacity: loading ? 0.6 : 1,
-      }}
-    >
-      <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none' }}>↻</span>
-      새로운 추천받기
-    </button>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', maxWidth: 220 }}>
+      <button
+        onClick={onClick}
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 8,
+          background: T.indigoSoft, border: `1px solid ${T.indigoBorder}`,
+          color: T.indigo, fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+          fontFamily: FONT, opacity: loading ? 0.6 : 1,
+        }}
+      >
+        <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none' }}>↻</span>
+        새로운 추천받기
+      </button>
+      <CostHint align="right" style={{ marginTop: 5 }}>
+        새 추천은 AI 호출 1회가 사용됩니다.
+      </CostHint>
+    </div>
   );
 }
 
@@ -663,6 +692,9 @@ function Phase1({
       >
         다음 단계로
       </PrimaryActionButton>
+      <CostHint align="center">
+        다음 단계에서 AI 주제 추천 호출 1회가 사용됩니다. 희망 학과와 관심 주제를 확인한 뒤 진행하세요.
+      </CostHint>
     </SectionCard>
   );
 }
@@ -732,6 +764,9 @@ function Phase2({
       >
         이 주제로 시작하기
       </PrimaryActionButton>
+      <CostHint align="center">
+        선택한 주제로 탐구 동기 분석 호출 1회가 사용됩니다. 같은 주제는 필요한 경우에만 다시 생성하세요.
+      </CostHint>
     </SectionCard>
   );
 }
@@ -941,6 +976,9 @@ function Phase6({
         <button onClick={onRetry} style={{ padding: '10px 20px', borderRadius: 10, background: T.primary, color: '#fff', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
           다시 시도
         </button>
+        <CostHint>
+          재시도는 AI 최종 생성 호출을 다시 사용합니다. 같은 입력으로 반복 실행하기 전에 오류 내용을 먼저 확인하세요.
+        </CostHint>
       </SectionCard>
     );
   }
@@ -1521,15 +1559,20 @@ export function Service4Seteuk() {
             }}>
               이전 단계
             </button>
-            <PrimaryActionButton
-              onClick={handleNext}
-              disabled={!canNext()}
-              loading={nextActionLoading}
-              loadingLabel={nextLoadingLabel}
-              style={{ flex: 1 }}
-            >
-              {phase === 5 ? 'AI 최종 생성하기' : '다음 단계로'}
-            </PrimaryActionButton>
+            <div style={{ flex: 1 }}>
+              <PrimaryActionButton
+                onClick={handleNext}
+                disabled={!canNext()}
+                loading={nextActionLoading}
+                loadingLabel={nextLoadingLabel}
+                style={{ width: '100%' }}
+              >
+                {phase === 5 ? 'AI 최종 생성하기' : '다음 단계로'}
+              </PrimaryActionButton>
+              <CostHint align="center">
+                이 단계는 AI 호출을 사용합니다. 같은 입력은 필요한 경우에만 다시 생성하세요.
+              </CostHint>
+            </div>
           </div>
         )}
 
