@@ -15,71 +15,19 @@ import {
   type UniversityTargetPick,
 } from '@/types/student';
 
-// ─── 5등급→9등급 환산 데이터 ──────────────────────────────────────────────────
-type ConversionVersion = 'gyeonggi' | 'busan' | 'gwangju' | 'mixed';
+// ─── 5등급→9등급 참고 환산 ───────────────────────────────────────────────────
+type ConversionVersion = 'standard';
 
-const GYEONGGI = [
-  [1.000,1.39],[1.083,1.53],[1.167,1.73],[1.250,1.87],[1.333,2.03],[1.417,2.18],
-  [1.500,2.31],[1.583,2.45],[1.667,2.61],[1.750,2.73],[1.833,2.88],[1.917,3.00],
-  [2.000,3.16],[2.083,3.28],[2.167,3.41],[2.250,3.54],[2.333,3.68],[2.417,3.80],
-  [2.500,3.95],[2.583,4.08],[2.667,4.21],[2.750,4.34],[2.833,4.48],[2.917,4.61],
-  [3.000,4.75],[3.083,4.87],[3.167,5.00],[3.250,5.12],[3.333,5.24],[3.417,5.33],
-  [3.500,5.47],[3.583,5.59],[3.667,5.71],[3.750,5.83],[3.833,5.98],[3.917,6.09],
-  [4.000,6.25],[4.083,6.36],[4.167,6.50],[4.250,6.61],[4.333,6.72],[4.417,6.81],
-  [4.500,6.94],[4.583,7.05],[4.667,7.18],[4.750,7.30],[4.833,7.45],[4.917,7.62],
-  [5.000,8.97],
-];
+const CONVERSION_VERSION: ConversionVersion = 'standard';
 
-const BUSAN = [
-  [1.00,1.45],[1.08,1.59],[1.16,1.78],[1.24,1.98],[1.33,2.14],[1.42,2.32],
-  [1.50,2.45],[1.66,2.72],[1.83,3.03],[2.00,3.35],[2.16,3.60],[2.33,3.91],
-  [2.50,4.20],[2.66,4.46],[2.83,4.73],[3.00,5.03],[3.16,5.28],[3.33,5.58],
-  [3.50,5.86],[3.66,6.08],[3.83,6.37],[4.00,6.67],[4.16,6.93],[4.33,7.20],
-  [4.50,7.48],[4.66,7.71],[4.83,8.00],[5.00,9.00],
-];
+function convertGrade(grade5: number): { grade9: number; reason: string } {
+  const clamped = Math.min(5, Math.max(1, grade5));
+  const grade9 = 1 + (clamped - 1) * 2;
 
-const GWANGJU = [
-  [1.00,1.51],[1.15,1.78],[1.30,2.10],[1.45,2.38],[1.60,2.63],[1.75,2.89],
-  [1.90,3.16],[2.05,3.45],[2.20,3.73],[2.35,3.97],[2.50,4.18],[2.65,4.42],
-  [2.80,4.66],[2.95,4.95],[3.10,5.22],[3.25,5.44],[3.40,5.68],[3.55,5.92],
-  [3.70,6.15],[3.85,6.38],[4.00,6.59],[4.15,6.87],[4.30,7.12],[4.45,7.44],
-  [4.60,7.73],[5.00,9.00],
-];
-
-function interpolate(val: number, data: number[][]): number {
-  if (val <= data[0][0]) return data[0][1];
-  if (val >= data[data.length - 1][0]) return data[data.length - 1][1];
-  for (let i = 0; i < data.length - 1; i++) {
-    if (val >= data[i][0] && val <= data[i + 1][0]) {
-      const t = (val - data[i][0]) / (data[i + 1][0] - data[i][0]);
-      return data[i][1] + t * (data[i + 1][1] - data[i][1]);
-    }
-  }
-  return val;
-}
-
-function convertGrade(grade5: number, version: ConversionVersion): { grade9: number; reason: string } {
-  const g = interpolate(grade5, GYEONGGI);
-  const b = interpolate(grade5, BUSAN);
-  const gj = interpolate(grade5, GWANGJU);
-
-  let grade9: number;
-  let reason: string;
-  if (version === 'gyeonggi') {
-    grade9 = g;
-    reason = `경기진학지도협의회 2025학년도 1학년 성적 분석 자료 기준으로 약 ${g.toFixed(3)} 등급으로 추정됩니다.`;
-  } else if (version === 'busan') {
-    grade9 = b;
-    reason = `부산시 교육청 2025학년도 고1 1~2학기 등급평균 분석 자료 기준으로 약 ${b.toFixed(3)} 등급으로 추정됩니다.`;
-  } else if (version === 'gwangju') {
-    grade9 = gj;
-    reason = `광주시 교육청 2025학년도 고1 등급평균 분석 자료 기준으로 약 ${gj.toFixed(3)} 등급으로 추정됩니다.`;
-  } else {
-    grade9 = (g + b + gj) / 3;
-    reason = `경기진협(${g.toFixed(3)}), 부산시 교육청(${b.toFixed(3)}), 광주시 교육청(${gj.toFixed(3)})의 2025학년도 분석 자료를 평균하여 약 ${grade9.toFixed(3)} 등급으로 추정됩니다.`;
-  }
-
-  return { grade9: Number(grade9.toFixed(3)), reason };
+  return {
+    grade9: Number(grade9.toFixed(3)),
+    reason: `입력한 5등급제 내신을 1등급=1.0, 5등급=9.0 기준의 단순 참고 환산으로 표시합니다. 실제 대학별 산출식과 전형 기준은 반드시 모집요강으로 확인하세요.`,
+  };
 }
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
@@ -126,13 +74,6 @@ const CATEGORIES = [
   { id: '의약', emoji: '🏥' },
   { id: '교육', emoji: '🎓' },
 ] as const;
-
-const VERSIONS: { id: ConversionVersion; name: string; desc: string }[] = [
-  { id: 'gyeonggi', name: '경기 진협', desc: '경기진학지도협의회 자료' },
-  { id: 'busan',    name: '부산 교육청', desc: '부산시 교육청 자료' },
-  { id: 'gwangju',  name: '광주 교육청', desc: '광주시 교육청 자료' },
-  { id: 'mixed',    name: '통합 평균', desc: '경기/부산/광주 평균' },
-];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function getBadgeStyle(badge: BadgeType) {
@@ -258,7 +199,7 @@ function TargetPicksPanel({
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: T.textSubtle }}>생기부 분석을 먼저 실행하면 목표 대학 기준 보완 포인트가 함께 표시됩니다.</div>
+              <div style={{ fontSize: 12, color: T.textSubtle }}>생기부 분석 업데이트가 끝나면 목표 대학 기준 보완 포인트가 함께 표시됩니다.</div>
             )}
           </div>
           {onOpenService && (
@@ -403,7 +344,6 @@ function UniversityCard({
 export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: number) => void }) {
   const { currentStudent, updateStudent, segibuAnalysis } = useStudent();
   const [gpa5, setGpa5] = useState(2.0);
-  const [conversionVersion, setConversionVersion] = useState<ConversionVersion>('mixed');
   const [gradeCounts, setGradeCounts] = useState({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [showCalculator, setShowCalculator] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
@@ -419,7 +359,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [savingPickKey, setSavingPickKey] = useState<string | null>(null);
 
-  const conversion = useMemo(() => convertGrade(gpa5, conversionVersion), [gpa5, conversionVersion]);
+  const conversion = useMemo(() => convertGrade(gpa5), [gpa5]);
   const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
   const targetPicks = useMemo(() => getUniversityPicks(naesinData), [naesinData]);
   const readinessWeaknesses = segibuAnalysis?.admissionsReadiness?.criticalWeaknesses ?? [];
@@ -525,7 +465,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
       service1: {
         grade5: gpa5,
         grade9: conversion.grade9,
-        conversionVersion,
+        conversionVersion: CONVERSION_VERSION,
         conversionReason: conversion.reason,
         searchRange,
         showAmbitious,
@@ -553,7 +493,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
       return;
     }
     setSaveMessage(`${TARGET_PICK_LABELS[slot]} 목표로 ${univ.name} ${univ.dept}을 저장했습니다.`);
-  }, [conversion.grade9, conversion.reason, conversionVersion, currentStudent, gpa5, naesinData, savingPickKey, searchRange, showAmbitious, targetPicks, updateStudent]);
+  }, [conversion.grade9, conversion.reason, currentStudent, gpa5, naesinData, savingPickKey, searchRange, showAmbitious, targetPicks, updateStudent]);
 
   const clearTargetPick = useCallback(async (slot: TargetPickSlot) => {
     setSaveMessage(null);
@@ -567,7 +507,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
       service1: {
         grade5: gpa5,
         grade9: conversion.grade9,
-        conversionVersion,
+        conversionVersion: CONVERSION_VERSION,
         conversionReason: conversion.reason,
         searchRange,
         showAmbitious,
@@ -583,7 +523,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
       return;
     }
     setSaveMessage(`${TARGET_PICK_LABELS[slot]} 목표를 비웠습니다.`);
-  }, [conversion.grade9, conversion.reason, conversionVersion, currentStudent, gpa5, naesinData, searchRange, showAmbitious, targetPicks, updateStudent]);
+  }, [conversion.grade9, conversion.reason, currentStudent, gpa5, naesinData, searchRange, showAmbitious, targetPicks, updateStudent]);
 
   const badgeCounts = {
     도전: filteredResults.filter(r => r.badge === '도전').length,
@@ -601,7 +541,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 'clamp(18px, 1.6vw, 22px)', fontWeight: 800, letterSpacing: '-0.03em', color: T.text }}>성적 입력</div>
-            <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 3 }}>5등급제 내신을 입력하면 9등급제로 자동 환산됩니다</div>
+            <div style={{ fontSize: 13, color: T.textSubtle, marginTop: 3 }}>5등급제 내신을 입력하면 9등급제 참고값으로 자동 환산됩니다</div>
           </div>
           <button
             onClick={() => setShowCalculator(v => !v)}
@@ -688,25 +628,6 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
             </button>
           </div>
         )}
-
-        {/* 환산 버전 선택 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-          {VERSIONS.map(v => (
-            <button
-              key={v.id}
-              onClick={() => setConversionVersion(v.id)}
-              style={{
-                padding: '12px 14px', borderRadius: 10, textAlign: 'left', cursor: 'pointer',
-                border: `2px solid ${conversionVersion === v.id ? T.dark : T.border}`,
-                background: conversionVersion === v.id ? T.dark : T.surface,
-                transition: 'all 0.15s', fontFamily: FONT,
-              }}
-            >
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3, color: conversionVersion === v.id ? 'rgba(255,255,255,0.5)' : T.textSubtle }}>{v.desc}</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: conversionVersion === v.id ? '#fff' : T.text }}>{v.name}</div>
-            </button>
-          ))}
-        </div>
 
         {/* 환산 결과 강조 박스 */}
         <div style={{

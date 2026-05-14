@@ -24,9 +24,12 @@ export function Footer({ showErrorReport = true }: FooterProps) {
         lineHeight: 1.5,
       }}
     >
-      <span>
-        UNITHING 운영: CAMPUS MENTOR · 통합 개발: AIXLIFE · 기획 및 개발 기반: 김강석 선생님
-      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span>
+          (주)커몬컴퍼니 | 총괄책임자 : 이동준 | 통합개발 : AIXLIFE | 기획 : 담당자 | 문의 : comeon1113@gmail.com
+        </span>
+        <span>Copyright © 2026 ComeonCompany. All rights reserved.</span>
+      </div>
       {showErrorReport && <ErrorReportButton />}
     </footer>
   );

@@ -184,6 +184,7 @@ const GENERATION_CONFIG = {
 
 const MAX_SEGIBU_PDF_BYTES = 4 * 1024 * 1024;
 const MAX_SEGIBU_TEXT_BYTES = 3.5 * 1024 * 1024;
+const SEGIBU_ANALYSIS_ENABLED = process.env.SEGIBU_ANALYSIS_ENABLED === 'true';
 
 const DEFAULT_READINESS: AdmissionsReadiness = {
   overall: '분석 결과를 바탕으로 대학 찾기, 과목 설계, 세특 보완을 순차적으로 진행해야 합니다.',
@@ -376,6 +377,9 @@ export async function POST(req: Request) {
       return Response.json({
         error: '교사 프로필을 확인하지 못했습니다. 다시 로그인하거나 서버 환경변수 SUPABASE_SERVICE_ROLE_KEY를 확인해 주세요.',
       }, { status: 401 });
+    }
+    if (!SEGIBU_ANALYSIS_ENABLED) {
+      return Response.json({ error: '생기부 분석은 현재 업데이트중입니다.' }, { status: 503 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

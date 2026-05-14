@@ -22,7 +22,7 @@ export type UniversityPicks = Partial<Record<TargetPickSlot, UniversityTargetPic
 export type Service1Snapshot = {
   grade5: number;
   grade9: number;
-  conversionVersion: 'gyeonggi' | 'busan' | 'gwangju' | 'mixed';
+  conversionVersion: 'standard';
   conversionReason: string;
   searchRange: number;
   showAmbitious: boolean;
