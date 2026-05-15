@@ -1,12 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Service1Grade } from '@/components/services/Service1Grade';
 import { Service2Subject } from '@/components/services/Service2Subject';
+import { Service3Segibu } from '@/components/services/Service3Segibu';
 import { Service4Seteuk } from '@/components/services/Service4Seteuk';
 import { Service6Roadmap } from '@/components/services/Service6Roadmap';
+import { isSegibuAnalysisAllowedEmail } from '@/lib/segibuAccess';
 
 const TABS = [
-  { id: 3, label: '생기부 분석', disabled: true, badge: '업데이트중' },
+  { id: 3, label: '생기부 분석' },
   { id: 1, label: '대학 찾기' },
   { id: 2, label: '선택 과목 가이드' },
   { id: 4, label: '세특 도우미' },
@@ -105,10 +108,14 @@ function SegibuUpdateNotice({
 }
 
 export default function DashboardPage() {
+  const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<number>(1);
   const [showSegibuNotice, setShowSegibuNotice] = useState(false);
+  const canUseSegibuAnalysis = isSegibuAnalysisAllowedEmail(session?.user?.email);
 
   useEffect(() => {
+    if (status === 'loading' || canUseSegibuAnalysis) return;
+
     let timer: number | null = null;
     const openNotice = () => {
       timer = window.setTimeout(() => setShowSegibuNotice(true), 0);
@@ -125,7 +132,7 @@ export default function DashboardPage() {
     return () => {
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, []);
+  }, [canUseSegibuAnalysis, status]);
 
   const closeSegibuNotice = (dismissForever: boolean) => {
     if (dismissForever) {
@@ -139,7 +146,7 @@ export default function DashboardPage() {
   };
 
   const openService = (serviceId: number) => {
-    if (serviceId === 3) {
+    if (serviceId === 3 && !canUseSegibuAnalysis) {
       setShowSegibuNotice(true);
       return;
     }
@@ -161,7 +168,9 @@ export default function DashboardPage() {
         lineHeight: 1.55,
         fontWeight: 600,
       }}>
-        학생 구분명은 실명 대신 번호나 별칭을 권장합니다. 생기부 분석은 현재 업데이트중이며, DB에는 생기부 원문·원문 인용을 제외한 상담 요약과 목표 대학/학과 선택값만 저장하는 방향을 유지합니다.
+        {canUseSegibuAnalysis
+          ? '학생 구분명은 실명 대신 번호나 별칭을 권장합니다. 생기부 PDF는 비식별화 확인 후 AI 분석에 사용되며, DB에는 생기부 원문·원문 인용을 제외한 상담 요약과 목표 대학/학과 선택값만 저장합니다.'
+          : '학생 구분명은 실명 대신 번호나 별칭을 권장합니다. 생기부 분석은 현재 업데이트중이며, DB에는 생기부 원문·원문 인용을 제외한 상담 요약과 목표 대학/학과 선택값만 저장하는 방향을 유지합니다.'}
       </div>
 
       {/* Tab navigation */}
@@ -175,8 +184,8 @@ export default function DashboardPage() {
       }}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
-          const isDisabled = 'disabled' in tab && Boolean(tab.disabled);
-          const badge = 'badge' in tab ? tab.badge : null;
+          const isDisabled = tab.id === 3 && !canUseSegibuAnalysis;
+          const badge = isDisabled ? '업데이트중' : null;
           return (
             <button
               key={tab.id}
@@ -229,6 +238,7 @@ export default function DashboardPage() {
       {/* Tab content */}
       {activeTab === 1 && <Service1Grade onOpenService={openService} />}
       {activeTab === 2 && <Service2Subject />}
+      {activeTab === 3 && canUseSegibuAnalysis && <Service3Segibu />}
       {activeTab === 4 && <Service4Seteuk />}
       {activeTab === 6 && <Service6Roadmap onOpenService={openService} />}
     </div>

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { checkAiQuota } from '@/lib/aiUsage';
 import { normalizeSegibuAnalysis } from '@/lib/segibuAnalysis';
+import { isSegibuAnalysisAllowedEmail } from '@/lib/segibuAccess';
 import type { AdmissionsReadiness, CompKey, SegibuAnalysis } from '@/types/analysis';
 
 const SYSTEM_INSTRUCTION = `당신은 고등학교 생활기록부(생기부)를 실제 입학사정관의 관점에서 정밀하게 분석하는 '생기부 분석 전문 AI'입니다.
@@ -372,13 +373,14 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return Response.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-    const teacherId = (session.user as { teacherId?: string }).teacherId;
+    const sessionUser = session.user as { teacherId?: string; email?: string | null };
+    const teacherId = sessionUser.teacherId;
     if (!teacherId) {
       return Response.json({
         error: '교사 프로필을 확인하지 못했습니다. 다시 로그인하거나 서버 환경변수 SUPABASE_SERVICE_ROLE_KEY를 확인해 주세요.',
       }, { status: 401 });
     }
-    if (!SEGIBU_ANALYSIS_ENABLED) {
+    if (!SEGIBU_ANALYSIS_ENABLED && !isSegibuAnalysisAllowedEmail(sessionUser.email)) {
       return Response.json({ error: '생기부 분석은 현재 업데이트중입니다.' }, { status: 503 });
     }
 

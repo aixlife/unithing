@@ -69,7 +69,7 @@ export function StudentModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div style={{ marginBottom: 22, padding: '10px 12px', borderRadius: 8, background: '#F8FAFC', border: '1px solid #E5E8EB', color: '#4E5968', fontSize: 12.5, lineHeight: 1.55 }}>
-          실명 대신 번호나 별칭을 권장합니다. 생기부 분석 기능은 현재 업데이트중이며, 재개 후 비식별화 확인을 거쳐 업로드할 수 있습니다.
+          실명 대신 번호나 별칭을 권장합니다. 생기부 PDF는 기능 이용 시 비식별화 확인을 거쳐 업로드합니다.
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>

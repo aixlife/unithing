@@ -199,7 +199,7 @@ function TargetPicksPanel({
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: T.textSubtle }}>생기부 분석 업데이트가 끝나면 목표 대학 기준 보완 포인트가 함께 표시됩니다.</div>
+              <div style={{ fontSize: 12, color: T.textSubtle }}>생기부 분석 결과가 있으면 목표 대학 기준 보완 포인트가 함께 표시됩니다.</div>
             )}
           </div>
           {onOpenService && (

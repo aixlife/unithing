@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useStudent } from '@/contexts/StudentContext';
+import { isSegibuAnalysisAllowedEmail } from '@/lib/segibuAccess';
 import {
   PresentationText,
   escapeHtml,
@@ -58,14 +60,19 @@ function summarizePick(pick: UniversityTargetPick | undefined) {
   return `${pick.name} ${pick.dept} / ${pick.process} / 기준 ${pick.grade.toFixed(2)}등급 / 현재 대비 ${gap}`;
 }
 
-function buildChecklist(statuses: RoadmapStatus[], hasReadiness: boolean) {
+function buildChecklist(statuses: RoadmapStatus[], hasReadiness: boolean, canUseSegibuAnalysis: boolean) {
   const missing = statuses.filter((item) => !item.done).map((item) => `${item.label} 완료`);
   const base = missing.length > 0 ? missing : [
     '목표 대학별 모집요강 변동 여부 확인',
     '학교 개설 과목과 선택군 충돌 여부 확인',
     '세특 활동 실행 증거와 후속 활동 일정 확인',
   ];
-  if (!hasReadiness) return ['생기부 분석 업데이트 후 학생부 요약 확인', ...base].slice(0, 5);
+  if (!hasReadiness) {
+    return [
+      canUseSegibuAnalysis ? '생기부 분석 실행 후 학생부 요약 확인' : '생기부 분석 업데이트 후 학생부 요약 확인',
+      ...base,
+    ].slice(0, 5);
+  }
   return base.slice(0, 5);
 }
 
@@ -241,10 +248,12 @@ function PickList({ picks }: { picks: ReturnType<typeof getUniversityPicks> }) {
 }
 
 export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId: number) => void }) {
+  const { data: session } = useSession();
   const { currentStudent, segibuAnalysis, updateStudent } = useStudent();
   const [subjectRecords, setSubjectRecords] = useState<UniversitySubjectRecord[]>([]);
   const [subjectLoading, setSubjectLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const canUseSegibuAnalysis = isSegibuAnalysisAllowedEmail(session?.user?.email);
 
   const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
   const picks = useMemo(() => getUniversityPicks(naesinData), [naesinData]);
@@ -294,7 +303,9 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
     {
       label: '생기부 분석',
       done: Boolean(segibuAnalysis),
-      detail: segibuAnalysis ? `학업 ${segibuAnalysis.scores.academic} / 진로 ${segibuAnalysis.scores.career} / 공동체 ${segibuAnalysis.scores.community}` : '현재 업데이트중',
+      detail: segibuAnalysis
+        ? `학업 ${segibuAnalysis.scores.academic} / 진로 ${segibuAnalysis.scores.career} / 공동체 ${segibuAnalysis.scores.community}`
+        : canUseSegibuAnalysis ? 'PDF 분석 또는 저장된 분석 필요' : '현재 업데이트중',
     },
     {
       label: '목표 대학',
@@ -311,14 +322,18 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
       done: Boolean(latestSeteuk),
       detail: latestSeteuk ? latestSeteuk.selectedTopic : '세특 최종 생성 필요',
     },
-  ], [latestSeteuk, picks, primaryPick, segibuAnalysis, subjectLoading, subjects.core.length, subjects.recommended.length]);
+  ], [canUseSegibuAnalysis, latestSeteuk, picks, primaryPick, segibuAnalysis, subjectLoading, subjects.core.length, subjects.recommended.length]);
 
-  const checklist = useMemo(() => buildChecklist(statuses, Boolean(readiness)), [readiness, statuses]);
+  const checklist = useMemo(() => buildChecklist(statuses, Boolean(readiness), canUseSegibuAnalysis), [canUseSegibuAnalysis, readiness, statuses]);
 
   const snapshot = useMemo(() => buildSnapshot({
     studentName: currentStudent?.name ?? '학생',
     targetDept,
-    analysisSummary: readiness?.overall || segibuAnalysis?.summaryHighlights.career || '생기부 분석 업데이트가 끝나면 상담 요약이 생성됩니다.',
+    analysisSummary: readiness?.overall || segibuAnalysis?.summaryHighlights.career || (
+      canUseSegibuAnalysis
+        ? '생기부 분석을 완료하면 상담 요약이 생성됩니다.'
+        : '생기부 분석 업데이트가 끝나면 상담 요약이 생성됩니다.'
+    ),
     targetSummary: TARGET_PICK_SLOTS.map(({ label, slot }) => `${label}: ${summarizePick(picks[slot])}`).join('\n'),
     subjectSummary: [
       subjects.core.length > 0 ? `2학년 우선 확인: ${subjects.core.slice(0, 5).join(', ')}` : '',
@@ -327,7 +342,7 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
     ].filter(Boolean).join('\n'),
     seteukSummary: latestSeteuk ? `${latestSeteuk.selectedTopic}\n${latestSeteuk.oneLineFeedback}` : '세특 도우미에서 보완 활동을 생성해야 합니다.',
     nextChecklist: checklist,
-  }), [checklist, currentStudent?.name, latestSeteuk, picks, readiness?.overall, segibuAnalysis?.summaryHighlights.career, subjectRecords.length, subjects.core, subjects.recommended, targetDept]);
+  }), [canUseSegibuAnalysis, checklist, currentStudent?.name, latestSeteuk, picks, readiness?.overall, segibuAnalysis?.summaryHighlights.career, subjectRecords.length, subjects.core, subjects.recommended, targetDept]);
 
   const handleSave = async () => {
     if (!currentStudent) return;
@@ -405,7 +420,7 @@ export function Service6Roadmap({ onOpenService }: { onOpenService?: (serviceId:
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(320px, 0.85fr)', gap: 16 }}>
-        <Section title="현재 학생부 요약" onClick={() => onOpenService?.(3)} action={<button onClick={() => onOpenService?.(3)} style={linkButtonStyle()}>업데이트중</button>}>
+        <Section title="현재 학생부 요약" onClick={() => onOpenService?.(3)} action={<button onClick={() => onOpenService?.(3)} style={linkButtonStyle()}>{canUseSegibuAnalysis ? '분석 열기' : '업데이트중'}</button>}>
           <PresentationText value={snapshot.analysisSummary} fontSize={16} color={T.textMuted} lineHeight={1.75} />
           {readiness?.criticalWeaknesses.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
