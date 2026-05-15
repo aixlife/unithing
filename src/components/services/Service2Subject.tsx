@@ -8,7 +8,7 @@ import {
 import { UNIVERSITY_TIPS } from '@/data/universityData';
 import { SUBJECT_DETAILS } from '@/data/subjectDetails';
 import { useStudent } from '@/contexts/StudentContext';
-import { getPrimaryTargetPick, getUniversityPicks } from '@/types/student';
+import { getNaesinData, getPrimaryTargetPick, getUniversityPicks, type NaesinData } from '@/types/student';
 import { PresentationText, stripPresentationMarkdown } from './PresentationText';
 import type { SubjectRecommendationPlan, UniversitySubjectRecord } from '@/types/subjects';
 
@@ -17,6 +17,19 @@ type ParsedCurriculumPdf = {
   groups: { grade: number; semester: string; credits: number; selectCount: number; subjects: string[] }[];
   notes: string[];
 };
+
+type PlanSemester = 1 | 2;
+
+type SubjectPlanSelection = {
+  grade: number;
+  groupId: string;
+  subject: string;
+  semester: PlanSemester;
+  selectedAt: string;
+  source: 'manual';
+};
+
+type SubjectPlanSelections = Record<string, SubjectPlanSelection>;
 
 const T = {
   primary: '#1B64DA',
@@ -145,8 +158,45 @@ function getGradingType(name: string) {
   return '5등급';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getSubjectSelectionKey(grade: number, groupId: string, subject: string, semester: PlanSemester) {
+  return `${grade}|${groupId}|${normalizeSubjectName(subject)}|${semester}`;
+}
+
+function getSubjectPlanSelections(raw: unknown): SubjectPlanSelections {
+  const data = getNaesinData(raw);
+  const selections = data.subject_plan_selections;
+  if (!isRecord(selections)) return {};
+
+  return Object.entries(selections).reduce<SubjectPlanSelections>((acc, [key, value]) => {
+    if (!isRecord(value)) return acc;
+    const semester = value.semester === 1 || value.semester === 2 ? value.semester : null;
+    if (
+      typeof value.grade === 'number' &&
+      typeof value.groupId === 'string' &&
+      typeof value.subject === 'string' &&
+      typeof value.selectedAt === 'string' &&
+      value.source === 'manual' &&
+      semester
+    ) {
+      acc[key] = {
+        grade: value.grade,
+        groupId: value.groupId,
+        subject: value.subject,
+        semester,
+        selectedAt: value.selectedAt,
+        source: 'manual',
+      };
+    }
+    return acc;
+  }, {});
+}
+
 export function Service2Subject() {
-  const { currentStudent, segibuAnalysis } = useStudent();
+  const { currentStudent, segibuAnalysis, updateStudent } = useStudent();
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -177,6 +227,8 @@ export function Service2Subject() {
   const [subjectPlan, setSubjectPlan] = useState<SubjectRecommendationPlan | null>(null);
   const [subjectPlanLoading, setSubjectPlanLoading] = useState(false);
   const [subjectPlanError, setSubjectPlanError] = useState<string | null>(null);
+  const [subjectSelectionSavingKey, setSubjectSelectionSavingKey] = useState<string | null>(null);
+  const [subjectSelectionMessage, setSubjectSelectionMessage] = useState<string | null>(null);
   const curriculumFileRef = useRef<HTMLInputElement>(null);
   const paidActionInFlightRef = useRef<Record<string, boolean>>({});
 
@@ -191,6 +243,12 @@ export function Service2Subject() {
   const studentTargetDept = useMemo(() => {
     return currentStudent?.target_dept || studentTargetPick?.dept || '';
   }, [currentStudent?.target_dept, studentTargetPick]);
+
+  const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
+
+  const subjectPlanSelections = useMemo(() => {
+    return getSubjectPlanSelections(currentStudent?.naesin_data);
+  }, [currentStudent?.naesin_data]);
 
   const subjectWeaknesses = useMemo(() => {
     return segibuAnalysis?.admissionsReadiness?.criticalWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`) ?? [];
@@ -255,6 +313,48 @@ export function Service2Subject() {
     if (activeAreaTab && areaTabList.includes(activeAreaTab)) return activeAreaTab;
     return areaTabList[0];
   }, [activeAreaTab, areaTabList]);
+
+  const isManuallySelected = (grade: number, groupId: string, subject: string, semester: PlanSemester) => {
+    return Boolean(subjectPlanSelections[getSubjectSelectionKey(grade, groupId, subject, semester)]);
+  };
+
+  const toggleSubjectSelection = async (grade: number, groupId: string, subject: string, semester: PlanSemester) => {
+    const key = getSubjectSelectionKey(grade, groupId, subject, semester);
+    setSubjectSelectionMessage(null);
+
+    if (!currentStudent) {
+      setSubjectSelectionMessage('학생을 먼저 선택하면 상담 중 선택한 과목을 저장할 수 있습니다.');
+      return;
+    }
+    if (subjectSelectionSavingKey) return;
+
+    const nextSelections: SubjectPlanSelections = { ...subjectPlanSelections };
+    if (nextSelections[key]) {
+      delete nextSelections[key];
+    } else {
+      nextSelections[key] = {
+        grade,
+        groupId,
+        subject,
+        semester,
+        selectedAt: new Date().toISOString(),
+        source: 'manual',
+      };
+    }
+
+    const nextNaesinData: NaesinData = {
+      ...naesinData,
+      subject_plan_selections: nextSelections,
+    };
+
+    setSubjectSelectionSavingKey(key);
+    try {
+      const updated = await updateStudent(currentStudent.id, { naesin_data: nextNaesinData });
+      if (!updated) setSubjectSelectionMessage('선택 과목을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSubjectSelectionSavingKey(null);
+    }
+  };
 
   const handleFieldSelect = (field: Field) => { setSelectedField(field); setSelectedMajor(null); setSearchTerm(''); };
   const handleMajorSelect = (major: Major) => {
@@ -324,8 +424,8 @@ export function Service2Subject() {
   const openSubjectPlanDocument = () => {
     if (!selectedMajor) return;
 
-    const check = (checked: boolean, recommended = false) => checked
-      ? `<span class="check ${recommended ? 'recommended' : 'mandatory'}">✓</span>`
+    const check = (offered: boolean, state: 'empty' | 'recommended' | 'manual' = 'empty') => offered
+      ? `<span class="semester-box ${state}">${state === 'empty' ? '' : '✓'}</span>`
       : '';
     const typeBadge = (type: string) => {
       const cls = type === '진로' ? 'career' : type === '융합' ? 'fusion' : 'default';
@@ -344,8 +444,8 @@ export function Service2Subject() {
           <td>${escapeHtml(area)}</td>
           <td class="subject-name strong">${escapeHtml(subject.name)}</td>
           <td class="center small">${escapeHtml(type)} 선택</td>
-          <td class="center">${check(subject.semesters.includes(1), true)}</td>
-          <td class="center">${check(subject.semesters.includes(2), true)}</td>
+          <td class="center">${check(subject.semesters.includes(1), 'recommended')}</td>
+          <td class="center">${check(subject.semesters.includes(2), 'recommended')}</td>
           <td class="center small">${escapeHtml(getGradingType(subject.name))}</td>
           <td></td>
         </tr>
@@ -363,8 +463,8 @@ export function Service2Subject() {
             ${firstInArea ? `<td rowspan="${areaGroup.subjects.length}">${escapeHtml(areaGroup.area)}</td>` : ''}
             <td class="subject-name ${subject.isRecommended ? 'recommended-text' : ''}">${escapeHtml(subject.name)}</td>
             <td class="center">${typeBadge(subject.type)}</td>
-            <td class="center">${check(subject.semesters.includes(1), subject.isRecommended)}</td>
-            <td class="center">${check(subject.semesters.includes(2), subject.isRecommended)}</td>
+            <td class="center">${check(subject.semesters.includes(1), isManuallySelected(planGrade, group.id, subject.name, 1) ? 'manual' : subject.isRecommended ? 'recommended' : 'empty')}</td>
+            <td class="center">${check(subject.semesters.includes(2), isManuallySelected(planGrade, group.id, subject.name, 2) ? 'manual' : subject.isRecommended ? 'recommended' : 'empty')}</td>
             <td class="center small">${escapeHtml(subject.gradingType)}</td>
             <td></td>
           </tr>
@@ -401,6 +501,8 @@ export function Service2Subject() {
     h1 { margin: 0; font-size: 16px; line-height: 1.35; letter-spacing: 0; }
     .meta { color: rgba(255,255,255,0.76); font-size: 11px; font-weight: 700; white-space: nowrap; }
     .content { padding: 13px 12px; }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding: 10px 12px 0; color: var(--muted); font-size: 9px; font-weight: 800; }
+    .legend-item { display: inline-flex; gap: 5px; align-items: center; }
     table { width: 100%; table-layout: fixed; border-collapse: collapse; border: 1px solid var(--border); font-size: 9.2px; line-height: 1.35; }
     thead { background: #F8FAFC; }
     th, td { padding: 5px 5px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -417,8 +519,9 @@ export function Service2Subject() {
     .badge.career { background: var(--primary-soft); color: var(--primary); }
     .badge.fusion { background: #EDE9FE; color: #7C3AED; }
     .badge.default { background: var(--success-soft); color: #059669; }
-    .check { display: inline-flex; width: 13px; height: 13px; align-items: center; justify-content: center; border-radius: 3px; border: 1px solid var(--primary); font-size: 8px; font-weight: 900; }
-    .check.mandatory, .check.recommended { background: var(--primary); color: #fff; }
+    .semester-box { display: inline-flex; width: 13px; height: 13px; align-items: center; justify-content: center; border-radius: 3px; border: 1px solid var(--border); background: #fff; color: #fff; font-size: 8px; font-weight: 900; }
+    .semester-box.recommended { border-color: var(--primary); background: var(--primary); }
+    .semester-box.manual { border-color: #16A34A; background: #16A34A; }
     .group-start td { border-top: 2px solid var(--border); }
     .group-end td { border-bottom: 2px solid var(--border); }
     footer { padding: 9px 15px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; color: var(--subtle); font-size: 9px; }
@@ -439,6 +542,11 @@ export function Service2Subject() {
       <h1>${planGrade}학년 수강 신청 계획서</h1>
       <div class="meta">숭신고등학교 | ${escapeHtml(selectedMajor.name)}</div>
     </header>
+    <div class="legend">
+      <span class="legend-item"><span class="semester-box recommended">✓</span>추천/필수</span>
+      <span class="legend-item"><span class="semester-box manual">✓</span>상담 선택</span>
+      <span class="legend-item"><span class="semester-box empty"></span>개설 과목</span>
+    </div>
     <div class="content">
       <table>
         <thead>
@@ -458,7 +566,7 @@ export function Service2Subject() {
     </div>
     <footer>
       <span>* 본 계획서는 전공 적합성을 고려한 추천 안이며, 실제 수강 신청 시 변경될 수 있습니다.</span>
-      <strong>제작 : 숭신고등학교 진로진학상담부 김강석</strong>
+      <strong>Copyright © 2026 ComeonCompany.</strong>
     </footer>
   </main>
 </body>
@@ -1480,7 +1588,35 @@ export function Service2Subject() {
                   ))}
                 </div>
                 <span style={{ fontSize: 13, color: T.textSubtle }}>{selectedMajor.name} 전공 권장</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12, color: T.textMuted }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 13, height: 13, borderRadius: 3, border: `1px solid ${T.primary}`, background: T.primary, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><IconCheckSquare /></span>
+                    추천/필수
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 13, height: 13, borderRadius: 3, border: `1px solid ${T.success}`, background: T.success, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><IconCheckSquare /></span>
+                    상담 선택
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 13, height: 13, borderRadius: 3, border: `1px solid ${T.border}`, background: T.surface, display: 'inline-flex' }} />
+                    개설 과목
+                  </span>
+                </div>
               </div>
+
+              {subjectSelectionMessage && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: 9,
+                  border: `1px solid ${subjectSelectionMessage.includes('저장하지') ? '#FCA5A5' : T.primaryBorder}`,
+                  background: subjectSelectionMessage.includes('저장하지') ? T.dangerSoft : T.primarySoft,
+                  color: subjectSelectionMessage.includes('저장하지') ? T.danger : T.primary,
+                  fontSize: 12.5,
+                  fontWeight: 800,
+                }}>
+                  {subjectSelectionMessage}
+                </div>
+              )}
 
               {/* Printable area */}
               <div style={{ background: T.surface }}>
@@ -1549,9 +1685,12 @@ export function Service2Subject() {
                           {group.groupedSubjects.map((areaGroup, aIdx) => (
                             areaGroup.subjects.map((subject, sIdx) => {
                               const isLastInGroup = aIdx === group.groupedSubjects.length - 1 && sIdx === areaGroup.subjects.length - 1;
+                              const manualSemester1 = isManuallySelected(planGrade, group.id, subject.name, 1);
+                              const manualSemester2 = isManuallySelected(planGrade, group.id, subject.name, 2);
+                              const manuallySelected = manualSemester1 || manualSemester2;
                               return (
                                 <tr key={`${group.id}-${subject.name}`} style={{
-                                  backgroundColor: subject.isRecommended ? T.primarySoft : T.surface,
+                                  backgroundColor: manuallySelected ? T.successSoft : subject.isRecommended ? T.primarySoft : T.surface,
                                   borderBottom: isLastInGroup ? `2px solid ${T.borderStrong}` : `1px solid ${T.border}`,
                                   borderTop: (aIdx === 0 && sIdx === 0) ? `2px solid ${T.borderStrong}` : 'none',
                                 }}>
@@ -1567,9 +1706,12 @@ export function Service2Subject() {
                                   )}
                                   <td
                                     onClick={() => setSelectedSubjectName(subject.name)}
-                                    style={{ padding: '5px 6px', borderRight: `1px solid ${T.border}`, fontWeight: subject.isRecommended ? 700 : 500, cursor: 'pointer', color: subject.isRecommended ? T.primary : T.text }}
+                                    style={{ padding: '5px 6px', borderRight: `1px solid ${T.border}`, fontWeight: manuallySelected || subject.isRecommended ? 700 : 500, cursor: 'pointer', color: manuallySelected ? T.success : subject.isRecommended ? T.primary : T.text }}
                                   >
                                     {subject.name}
+                                    {manuallySelected && (
+                                      <span style={{ marginLeft: 5, fontSize: 7, padding: '1px 4px', borderRadius: 999, background: T.success, color: '#fff', fontWeight: 900 }}>선택</span>
+                                    )}
                                   </td>
                                   <td style={{ padding: '5px 6px', borderRight: `1px solid ${T.border}`, textAlign: 'center' }}>
                                     <span style={{ fontSize: '7px', padding: '1px 5px', borderRadius: 9999, fontWeight: 700, backgroundColor: subject.type === '진로' ? T.primarySoft : subject.type === '융합' ? '#EDE9FE' : T.successSoft, color: subject.type === '진로' ? T.primary : subject.type === '융합' ? '#7C3AED' : T.success }}>
@@ -1578,16 +1720,62 @@ export function Service2Subject() {
                                   </td>
                                   <td style={{ padding: '5px 6px', borderRight: `1px solid ${T.border}`, textAlign: 'center' }}>
                                     {subject.semesters.includes(1) && (
-                                      <div style={{ width: 14, height: 14, border: `1px solid ${subject.isRecommended ? T.primary : T.border}`, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: subject.isRecommended ? T.primary : T.surface, margin: '0 auto' }}>
-                                        {subject.isRecommended && <span style={{ color: '#fff' }}><IconCheckSquare /></span>}
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void toggleSubjectSelection(planGrade, group.id, subject.name, 1);
+                                        }}
+                                        disabled={Boolean(subjectSelectionSavingKey && subjectSelectionSavingKey !== getSubjectSelectionKey(planGrade, group.id, subject.name, 1))}
+                                        title="상담 선택 체크"
+                                        style={{
+                                          width: 14,
+                                          height: 14,
+                                          border: `1px solid ${manualSemester1 ? T.success : subject.isRecommended ? T.primary : T.border}`,
+                                          borderRadius: 3,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          backgroundColor: manualSemester1 ? T.success : subject.isRecommended ? T.primary : T.surface,
+                                          margin: '0 auto',
+                                          padding: 0,
+                                          color: '#fff',
+                                          cursor: subjectSelectionSavingKey ? 'wait' : 'pointer',
+                                          opacity: subjectSelectionSavingKey && subjectSelectionSavingKey !== getSubjectSelectionKey(planGrade, group.id, subject.name, 1) ? 0.55 : 1,
+                                        }}
+                                      >
+                                        {(manualSemester1 || subject.isRecommended) && <IconCheckSquare />}
+                                      </button>
                                     )}
                                   </td>
                                   <td style={{ padding: '5px 6px', borderRight: `1px solid ${T.border}`, textAlign: 'center' }}>
                                     {subject.semesters.includes(2) && (
-                                      <div style={{ width: 14, height: 14, border: `1px solid ${subject.isRecommended ? T.primary : T.border}`, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: subject.isRecommended ? T.primary : T.surface, margin: '0 auto' }}>
-                                        {subject.isRecommended && <span style={{ color: '#fff' }}><IconCheckSquare /></span>}
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void toggleSubjectSelection(planGrade, group.id, subject.name, 2);
+                                        }}
+                                        disabled={Boolean(subjectSelectionSavingKey && subjectSelectionSavingKey !== getSubjectSelectionKey(planGrade, group.id, subject.name, 2))}
+                                        title="상담 선택 체크"
+                                        style={{
+                                          width: 14,
+                                          height: 14,
+                                          border: `1px solid ${manualSemester2 ? T.success : subject.isRecommended ? T.primary : T.border}`,
+                                          borderRadius: 3,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          backgroundColor: manualSemester2 ? T.success : subject.isRecommended ? T.primary : T.surface,
+                                          margin: '0 auto',
+                                          padding: 0,
+                                          color: '#fff',
+                                          cursor: subjectSelectionSavingKey ? 'wait' : 'pointer',
+                                          opacity: subjectSelectionSavingKey && subjectSelectionSavingKey !== getSubjectSelectionKey(planGrade, group.id, subject.name, 2) ? 0.55 : 1,
+                                        }}
+                                      >
+                                        {(manualSemester2 || subject.isRecommended) && <IconCheckSquare />}
+                                      </button>
                                     )}
                                   </td>
                                   <td style={{ padding: '5px 6px', borderRight: `1px solid ${T.border}`, textAlign: 'center', color: T.textSubtle, fontSize: '7px' }}>{subject.gradingType}</td>
@@ -1607,7 +1795,7 @@ export function Service2Subject() {
                   <div style={{ fontSize: '0.65rem', color: T.textSubtle, fontStyle: 'italic' }}>
                     * 본 계획서는 전공 적합성을 고려한 추천 안이며, 실제 수강 신청 시 변경될 수 있습니다.
                   </div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: T.textMuted }}>제작 : 숭신고등학교 진로진학상담부 김강석</div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: T.textMuted }}>Copyright © 2026 ComeonCompany.</div>
                 </div>
               </div>
             </div>
