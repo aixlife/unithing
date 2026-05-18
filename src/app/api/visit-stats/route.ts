@@ -55,30 +55,46 @@ function unavailableResponse(status = 200) {
 
 async function getTeacherId() {
   const session = await getServerSession(authOptions);
-  return (session?.user as { teacherId?: string } | undefined)?.teacherId;
+  const user = session?.user as { teacherId?: string; email?: string | null; name?: string | null } | undefined;
+  if (!user?.email) return null;
+  if (user.teacherId) return user.teacherId;
+
+  const { data, error } = await supabaseServer
+    .from('teachers')
+    .upsert(
+      { email: user.email, name: user.name ?? '' },
+      { onConflict: 'email' }
+    )
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data?.id ?? null;
 }
 
 export async function GET() {
-  const teacherId = await getTeacherId();
-  if (!teacherId) return unavailableResponse(401);
-
   try {
+    const teacherId = await getTeacherId();
+    if (!teacherId) return unavailableResponse(401);
+
     const stats = await readStats(todayKst());
     return NextResponse.json({ available: true, ...stats });
-  } catch {
+  } catch (error) {
+    console.error('visit stats read failed', error);
     return unavailableResponse();
   }
 }
 
 export async function POST() {
-  const teacherId = await getTeacherId();
-  if (!teacherId) return unavailableResponse(401);
-
   try {
+    const teacherId = await getTeacherId();
+    if (!teacherId) return unavailableResponse(401);
+
     const day = todayKst();
     const stats = await recordVisit(teacherId, day);
     return NextResponse.json({ available: true, ...stats });
-  } catch {
+  } catch (error) {
+    console.error('visit stats record failed', error);
     return unavailableResponse();
   }
 }
