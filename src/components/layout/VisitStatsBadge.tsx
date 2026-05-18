@@ -39,7 +39,7 @@ export function VisitStatsBadge() {
     };
   }, []);
 
-  const title = '실시간 방문 현황';
+  const title = '실시간 접속 현황';
   const detail = stats?.available
     ? `오늘 ${formatCount(stats.today)}명 · 누적 ${formatCount(stats.total)}명`
     : stats

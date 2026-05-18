@@ -1,30 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { NextResponse } from 'next/server';
+import { authOptions } from '@/lib/authOptions';
 import { supabaseServer } from '@/lib/supabaseServer';
-
-const VISITOR_COOKIE = 'unithing_visitor_id';
-const TWO_YEARS = 60 * 60 * 24 * 365 * 2;
 
 function todayKst() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-function isVisitorId(value: string | undefined): value is string {
-  return Boolean(value && /^[0-9a-f-]{36}$/i.test(value));
-}
-
-function newVisitorId() {
-  return crypto.randomUUID();
-}
-
-function withVisitorCookie(response: NextResponse, visitorId: string) {
-  response.cookies.set(VISITOR_COOKIE, visitorId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: TWO_YEARS,
-  });
-  return response;
 }
 
 type VisitStatsRow = {
@@ -48,16 +28,16 @@ function rowToStats(row: VisitStatsRow | null, fallbackDay: string) {
 
 async function readStats(day: string) {
   const { data, error } = await supabaseServer
-    .rpc('get_site_visit_stats', { visit_day: day })
+    .rpc('get_site_teacher_visit_stats', { visit_day: day })
     .single();
 
   if (error) throw error;
   return rowToStats(data as VisitStatsRow | null, day);
 }
 
-async function recordVisit(visitorId: string, day: string) {
+async function recordVisit(teacherId: string, day: string) {
   const { data, error } = await supabaseServer
-    .rpc('record_site_visit', { visitor_id: visitorId, visit_day: day })
+    .rpc('record_site_teacher_visit', { teacher_id: teacherId, visit_day: day })
     .single();
 
   if (error) throw error;
@@ -73,7 +53,15 @@ function unavailableResponse(status = 200) {
   }, { status });
 }
 
+async function getTeacherId() {
+  const session = await getServerSession(authOptions);
+  return (session?.user as { teacherId?: string } | undefined)?.teacherId;
+}
+
 export async function GET() {
+  const teacherId = await getTeacherId();
+  if (!teacherId) return unavailableResponse(401);
+
   try {
     const stats = await readStats(todayKst());
     return NextResponse.json({ available: true, ...stats });
@@ -82,18 +70,15 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
-  const cookieId = req.cookies.get(VISITOR_COOKIE)?.value;
-  const visitorId = isVisitorId(cookieId) ? cookieId : newVisitorId();
-  const shouldSetCookie = visitorId !== cookieId;
+export async function POST() {
+  const teacherId = await getTeacherId();
+  if (!teacherId) return unavailableResponse(401);
 
   try {
     const day = todayKst();
-    const stats = await recordVisit(visitorId, day);
-    const response = NextResponse.json({ available: true, ...stats });
-    return shouldSetCookie ? withVisitorCookie(response, visitorId) : response;
+    const stats = await recordVisit(teacherId, day);
+    return NextResponse.json({ available: true, ...stats });
   } catch {
-    const response = unavailableResponse();
-    return shouldSetCookie ? withVisitorCookie(response, visitorId) : response;
+    return unavailableResponse();
   }
 }
