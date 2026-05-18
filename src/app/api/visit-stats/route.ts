@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isUsingSupabaseServiceRole, supabaseServer } from '@/lib/supabaseServer';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 const VISITOR_COOKIE = 'unithing_visitor_id';
 const TWO_YEARS = 60 * 60 * 24 * 365 * 2;
@@ -27,25 +27,41 @@ function withVisitorCookie(response: NextResponse, visitorId: string) {
   return response;
 }
 
-async function readStats(day: string) {
-  const [todayResult, totalResult] = await Promise.all([
-    supabaseServer
-      .from('site_daily_visitors')
-      .select('visitor_id', { count: 'exact', head: true })
-      .eq('day', day),
-    supabaseServer
-      .from('site_visitors')
-      .select('id', { count: 'exact', head: true }),
-  ]);
+type VisitStatsRow = {
+  today_count: number | string | null;
+  total_count: number | string | null;
+  day: string | null;
+};
 
-  if (todayResult.error) throw todayResult.error;
-  if (totalResult.error) throw totalResult.error;
+function toCount(value: number | string | null | undefined) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
+function rowToStats(row: VisitStatsRow | null, fallbackDay: string) {
   return {
-    today: todayResult.count ?? 0,
-    total: totalResult.count ?? 0,
-    day,
+    today: toCount(row?.today_count),
+    total: toCount(row?.total_count),
+    day: row?.day ?? fallbackDay,
   };
+}
+
+async function readStats(day: string) {
+  const { data, error } = await supabaseServer
+    .rpc('get_site_visit_stats', { visit_day: day })
+    .single();
+
+  if (error) throw error;
+  return rowToStats(data as VisitStatsRow | null, day);
+}
+
+async function recordVisit(visitorId: string, day: string) {
+  const { data, error } = await supabaseServer
+    .rpc('record_site_visit', { visitor_id: visitorId, visit_day: day })
+    .single();
+
+  if (error) throw error;
+  return rowToStats(data as VisitStatsRow | null, day);
 }
 
 function unavailableResponse(status = 200) {
@@ -58,8 +74,6 @@ function unavailableResponse(status = 200) {
 }
 
 export async function GET() {
-  if (!isUsingSupabaseServiceRole) return unavailableResponse();
-
   try {
     const stats = await readStats(todayKst());
     return NextResponse.json({ available: true, ...stats });
@@ -73,25 +87,9 @@ export async function POST(req: NextRequest) {
   const visitorId = isVisitorId(cookieId) ? cookieId : newVisitorId();
   const shouldSetCookie = visitorId !== cookieId;
 
-  if (!isUsingSupabaseServiceRole) {
-    const response = unavailableResponse();
-    return shouldSetCookie ? withVisitorCookie(response, visitorId) : response;
-  }
-
   try {
     const day = todayKst();
-
-    const visitorInsert = await supabaseServer
-      .from('site_visitors')
-      .upsert({ id: visitorId }, { onConflict: 'id', ignoreDuplicates: true });
-    if (visitorInsert.error) throw visitorInsert.error;
-
-    const dailyInsert = await supabaseServer
-      .from('site_daily_visitors')
-      .upsert({ day, visitor_id: visitorId }, { onConflict: 'day,visitor_id', ignoreDuplicates: true });
-    if (dailyInsert.error) throw dailyInsert.error;
-
-    const stats = await readStats(day);
+    const stats = await recordVisit(visitorId, day);
     const response = NextResponse.json({ available: true, ...stats });
     return shouldSetCookie ? withVisitorCookie(response, visitorId) : response;
   } catch {
