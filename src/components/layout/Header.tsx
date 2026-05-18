@@ -5,6 +5,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { useStudent } from '@/contexts/StudentContext';
 import { Student } from '@/lib/supabase';
 import { StudentModal } from '@/components/students/StudentModal';
+import { VisitStatsBadge } from '@/components/layout/VisitStatsBadge';
 
 function UnithingLogo({ size = 28 }: { size?: number }) {
   return (
@@ -148,12 +149,15 @@ export function Header() {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 clamp(16px, 3vw, 28px)', position: 'sticky', top: 0, zIndex: 100,
     }}>
-      <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <UnithingLogo size={28} />
-        <span style={{
-          fontWeight: 800, fontSize: 16, letterSpacing: '-0.03em', color: '#191F28', lineHeight: 1,
-        }}>UNITHING</span>
-      </Link>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <UnithingLogo size={28} />
+          <span style={{
+            fontWeight: 800, fontSize: 16, letterSpacing: '-0.03em', color: '#191F28', lineHeight: 1,
+          }}>UNITHING</span>
+        </Link>
+        <VisitStatsBadge />
+      </div>
 
       <nav style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <StudentSelector />

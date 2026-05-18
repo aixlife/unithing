@@ -75,6 +75,12 @@ const CATEGORIES = [
   { id: '교육', emoji: '🎓' },
 ] as const;
 
+const SEARCH_RANGE_OPTIONS = [
+  { value: 0.5, label: '도전(+0.5)' },
+  { value: 0.3, label: '적정(+0.3)' },
+  { value: 0.1, label: '안정(+0.1)' },
+] as const;
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function getBadgeStyle(badge: BadgeType) {
   if (badge === '도전') return { bg: T.accentSoft, color: T.accent, stripe: T.accent };
@@ -85,6 +91,10 @@ function getBadgeStyle(badge: BadgeType) {
 function formatGap(gap: number) {
   if (gap > 0) return `+${gap.toFixed(2)}`;
   return gap.toFixed(2);
+}
+
+function getSearchRangeLabel(range: number) {
+  return SEARCH_RANGE_OPTIONS.find((option) => option.value === range)?.label ?? `±${range.toFixed(1)}`;
 }
 
 function getTargetPickSavingKey(slot: TargetPickSlot, univ: UnivResult) {
@@ -671,7 +681,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
             <span style={{ fontSize: 14, fontWeight: 700, color: T.textMuted }}>계열별 탐색</span>
             {searched && (
               <span style={{ fontSize: 12, color: T.textSubtle }}>
-                검색 범위 ±{searchRange.toFixed(2)} 기준
+                검색 범위 {getSearchRangeLabel(searchRange)} 기준
               </span>
             )}
           </div>
@@ -757,16 +767,16 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ display: 'flex', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden' }}>
-              {[0.1, 0.3, 0.5].map(r => (
-                <button key={r} onClick={() => setSearchRange(r)}
+              {SEARCH_RANGE_OPTIONS.map(({ value, label }) => (
+                <button key={value} onClick={() => setSearchRange(value)}
                   style={{
                     padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                     border: 'none', fontFamily: FONT,
-                    background: searchRange === r ? T.primary : 'transparent',
-                    color: searchRange === r ? '#fff' : T.textMuted,
+                    background: searchRange === value ? T.primary : 'transparent',
+                    color: searchRange === value ? '#fff' : T.textMuted,
                     transition: 'all 0.12s',
                   }}>
-                  ±{r}
+                  {label}
                 </button>
               ))}
             </div>
@@ -889,7 +899,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
               <div style={{ fontSize: 40 }}>🔍</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>조건에 맞는 대학이 없습니다</div>
               <div style={{ fontSize: 13, color: T.textSubtle }}>
-                현재 범위(±{searchRange.toFixed(2)}) 내에 결과가 없어요
+                현재 범위({getSearchRangeLabel(searchRange)}) 내에 결과가 없어요
               </div>
               <button
                 onClick={() => setSearchRange(0.3)}
@@ -899,7 +909,7 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
                   fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
                 }}
               >
-                범위 ±0.3으로 확대
+                적정(+0.3)으로 변경
               </button>
             </div>
           ) : (

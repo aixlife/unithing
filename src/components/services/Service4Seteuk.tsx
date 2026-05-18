@@ -1137,7 +1137,7 @@ export function Service4Seteuk() {
   const targetPick = useMemo(() => getPrimaryTargetPick(getUniversityPicks(naesinData)), [naesinData]);
   const savedSeteukRecords = useMemo(() => getSeteukRecords(naesinData), [naesinData]);
   const readinessWeaknesses = useMemo(() => segibuAnalysis?.admissionsReadiness?.criticalWeaknesses ?? [], [segibuAnalysis]);
-  const effectiveMajor = major || currentStudent?.target_dept || '';
+  const effectiveMajor = major;
   const targetLabel = useMemo(() => getTargetLabel(targetPick, currentStudent?.target_dept ?? ''), [currentStudent?.target_dept, targetPick]);
   const remediationSuggestions = useMemo(() => (
     buildRemediationSuggestions(readinessWeaknesses, targetPick, currentStudent?.target_dept ?? '', subjectHints)
@@ -1149,7 +1149,7 @@ export function Service4Seteuk() {
     restoredRef.current = false;
     const timer = window.setTimeout(() => {
       setPhase(1);
-      setMajor('');
+      setMajor(currentStudent?.target_dept ?? '');
       setInterest('');
       setActivities('');
       setTopics([]);
@@ -1170,7 +1170,7 @@ export function Service4Seteuk() {
       if (saved) {
         try {
           const d = JSON.parse(saved) as SavedSeteukData;
-          if (d.major) setMajor(d.major);
+          if (Object.prototype.hasOwnProperty.call(d, 'major')) setMajor(d.major ?? '');
           if (d.interest) setInterest(d.interest);
           if (d.activities) setActivities(d.activities);
           if (d.topics) setTopics(d.topics);
@@ -1192,7 +1192,7 @@ export function Service4Seteuk() {
       restoredRef.current = true;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [storageKeys]);
+  }, [currentStudent?.target_dept, storageKeys]);
 
   // Save to per-student localStorage
   useEffect(() => {
