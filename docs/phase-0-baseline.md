@@ -54,6 +54,10 @@ Local and Vercel environments must provide:
 ```bash
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+KAKAO_CLIENT_ID=
+KAKAO_CLIENT_SECRET=
+KAKAO_ADMIN_KEY=
+KAKAO_APP_ID=
 NEXTAUTH_URL=
 NEXTAUTH_SECRET=
 NEXT_PUBLIC_SUPABASE_URL=
@@ -84,6 +88,28 @@ The localhost callback is only needed for local Google login testing:
 http://localhost:3000/api/auth/callback/google
 ```
 
+Kakao Developers must include the production OAuth callback:
+
+```text
+https://unithing.vercel.app/api/auth/callback/kakao
+```
+
+The localhost callback is only needed for local Kakao login testing:
+
+```text
+http://localhost:3000/api/auth/callback/kakao
+```
+
+Kakao unlink webhook must be registered as:
+
+```text
+Host: https://unithing.vercel.app
+Method: GET
+Path: /api/webhooks/kakao/unlink
+```
+
+Kakao consent items only need `profile_nickname` for the current login flow. `account_email` is optional and can remain unavailable.
+
 ## Production Smoke Test
 
 Run this manually on the deployed Vercel URL after confirming the Google OAuth callback and Vercel env values:
@@ -104,7 +130,7 @@ Phase 0 is complete as of 2026-04-27. Google login was manually confirmed, and t
 
 ## Known Baseline Limits
 
-- Kakao login is not wired as a provider.
+- Kakao login requires Kakao Developers redirect URI, client secret, and consent item setup before production use.
 - Service2 uses the original curated static data, not the full 2028 recommended-subject CSV.
 - Service3 and the integrated report view use prompt-based guidebook philosophy, not PDF RAG.
 - The integrated report is simplified compared with the full original export/cumulative-analysis app.

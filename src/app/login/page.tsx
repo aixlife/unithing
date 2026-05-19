@@ -1,5 +1,6 @@
 'use client';
-import { signIn } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { getProviders, signIn, type ClientSafeProvider } from 'next-auth/react';
 import { Footer } from '@/components/layout/Footer';
 
 function GoogleIcon() {
@@ -18,6 +19,18 @@ function GoogleIcon() {
   );
 }
 
+function KakaoIcon() {
+  return (
+    <span style={{
+      width: 22, height: 22, borderRadius: '50%', background: '#181600',
+      color: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 13, fontWeight: 900, flexShrink: 0, lineHeight: 1,
+    }}>
+      K
+    </span>
+  );
+}
+
 function UnithingLogo({ size = 44 }: { size?: number }) {
   return (
     <div style={{
@@ -32,6 +45,26 @@ function UnithingLogo({ size = 44 }: { size?: number }) {
 }
 
 export default function LoginPage() {
+  const [providers, setProviders] = useState<Record<string, ClientSafeProvider> | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getProviders()
+      .then((nextProviders) => {
+        if (mounted) setProviders(nextProviders);
+      })
+      .catch(() => {
+        if (mounted) setProviders({});
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const kakaoDisabled = providers !== null && !providers.kakao;
+
   return (
     <div style={{
       minHeight: '100vh', background: '#F4F6F8',
@@ -78,14 +111,19 @@ export default function LoginPage() {
               Google로 시작하기
             </button>
 
-            {/* Kakao */}
-            <button style={{
-              height: 52, borderRadius: 10,
-              background: '#FEE500', color: '#181600',
-              border: 'none', fontSize: 15, fontWeight: 600,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              cursor: 'pointer', letterSpacing: '-0.01em',
-            }}>
+            <button
+              onClick={() => signIn('kakao', { callbackUrl: '/dashboard' })}
+              disabled={kakaoDisabled}
+              title={kakaoDisabled ? '카카오 로그인 환경변수가 아직 설정되지 않았습니다.' : undefined}
+              style={{
+                height: 52, borderRadius: 10,
+                background: '#FEE500', color: '#181600',
+                border: 'none', fontSize: 15, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                cursor: kakaoDisabled ? 'not-allowed' : 'pointer', letterSpacing: '-0.01em',
+                opacity: kakaoDisabled ? 0.62 : 1,
+              }}>
+              <KakaoIcon />
               카카오로 시작하기
             </button>
           </div>

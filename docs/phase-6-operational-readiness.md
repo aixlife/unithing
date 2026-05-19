@@ -33,11 +33,18 @@ NEXTAUTH_URL=https://unithing.vercel.app
 NEXTAUTH_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+KAKAO_CLIENT_ID=
+KAKAO_CLIENT_SECRET=
+KAKAO_ADMIN_KEY=
+KAKAO_APP_ID=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
 ```
+
+`KAKAO_CLIENT_ID` is the Kakao REST API key. Enable Kakao Login client secret and use that value for `KAKAO_CLIENT_SECRET`.
+`KAKAO_ADMIN_KEY` is the Kakao Admin key used to verify unlink webhook requests. `KAKAO_APP_ID` is the numeric app ID shown in Kakao Developers.
 
 Optional operating limits:
 
@@ -88,5 +95,12 @@ Move quota storage to Supabase before a larger public launch if strict enforceme
 - Apply or compare the Supabase migration against production.
 - Test unauthenticated requests to student and AI routes return 401.
 - Confirm the new AI limits fit the intended free launch usage.
-- Decide whether to connect Kakao login or hide the current Kakao button before public use.
+- Add the Kakao production redirect URI: `https://unithing.vercel.app/api/auth/callback/kakao`.
+- For local testing, add the Kakao localhost redirect URI: `http://localhost:3000/api/auth/callback/kakao`.
+- Confirm Kakao consent items include profile nickname. Account email is optional because UNITHING identifies Kakao users by Kakao user id.
+- Add the Kakao unlink webhook:
+  - Host: `https://unithing.vercel.app`
+  - Method: `GET`
+  - Path: `/api/webhooks/kakao/unlink`
+- Confirm Kakao unlink webhook test returns 200 after `KAKAO_ADMIN_KEY`, `KAKAO_APP_ID`, and `SUPABASE_SERVICE_ROLE_KEY` are configured.
 - Decide whether the book/ad/sidebar operating content is part of launch scope.

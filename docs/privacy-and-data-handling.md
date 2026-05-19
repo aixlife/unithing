@@ -40,6 +40,7 @@ Student-record AI analysis is split into two layers:
 - Dashboard access is protected by NextAuth.
 - Student API routes require a valid session and teacher id.
 - AI routes require a valid session and teacher id.
+- Kakao unlink webhook requests are verified with `Authorization: KakaoAK {KAKAO_ADMIN_KEY}` and `KAKAO_APP_ID` before deleting a Kakao-linked teacher account.
 - Student-record text and curriculum PDF AI routes reject missing or oversized inputs before quota/model calls because Vercel Functions reject request bodies over 4.5MB.
 - Server routes use `SUPABASE_SERVICE_ROLE_KEY` when configured and still filter by `teacher_id`.
 - A soft per-teacher daily AI quota is applied in server memory:
@@ -58,6 +59,7 @@ Student-record AI analysis is split into two layers:
 ## Production Checklist
 
 - Add `SUPABASE_SERVICE_ROLE_KEY` to Vercel production and preview environments.
+- Add `KAKAO_ADMIN_KEY` and `KAKAO_APP_ID` before enabling the Kakao unlink webhook.
 - Apply `supabase/migrations/20260428_unithing_operational_baseline.sql`.
 - Confirm direct anon access to `teachers` and `students` is blocked.
 - Confirm dashboard, student APIs, and AI APIs return 401 when not signed in.

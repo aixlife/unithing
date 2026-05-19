@@ -51,7 +51,7 @@ updated_post_meeting: 2026-05-12
 
 ### 주의할 현재 한계
 
-- 카카오 로그인은 버튼만 있고 provider 미연동
+- 카카오 로그인 provider는 연결됐고, 운영 환경에서는 Kakao Developers redirect URI/동의항목/env 설정이 필요함
 - Service2의 교육과정 PDF AI 파싱 기능은 대표 편제표 1종 기준으로 1차 복원됨
 - 원본 학생부 리포트 앱의 Excel 다운로드, 누적 분석, D3 워드클라우드는 축소됨
 - 생기부 원문/AI 원문 인용 저장은 개인정보 보호를 위해 제외됨
