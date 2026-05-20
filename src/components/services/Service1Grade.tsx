@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowRight, Save, X } from 'lucide-react';
+import { ArrowRight, Printer, Save, X } from 'lucide-react';
 import { useStudent } from '@/contexts/StudentContext';
 import type { ReadinessIssue } from '@/types/analysis';
 import {
@@ -99,6 +99,15 @@ function getSearchRangeLabel(range: number) {
 
 function getTargetPickSavingKey(slot: TargetPickSlot, univ: UnivResult) {
   return `${slot}|${univ.name}|${univ.dept}|${univ.process}|${univ.type}`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function TargetPicksPanel({
@@ -535,6 +544,102 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
     setSaveMessage(`${TARGET_PICK_LABELS[slot]} 목표를 비웠습니다.`);
   }, [conversion.grade9, conversion.reason, currentStudent, gpa5, naesinData, searchRange, showAmbitious, targetPicks, updateStudent]);
 
+  const openUniversityPrintDocument = useCallback(() => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const studentMeta = currentStudent
+      ? [currentStudent.name, currentStudent.school, currentStudent.grade].filter(Boolean).join(' · ')
+      : '학생 미선택';
+    const filterMeta = [
+      `5등급 ${gpa5.toFixed(3)}`,
+      `9등급 환산 ${conversion.grade9.toFixed(3)}`,
+      `범위 ${getSearchRangeLabel(searchRange)}`,
+      selectedCategory !== '전체' ? `계열 ${selectedCategory}` : '',
+      selectedUniversity !== '전체' ? `대학 ${selectedUniversity}` : '',
+      searchQuery.trim() ? `검색어 ${searchQuery.trim()}` : '',
+      showAmbitious ? '소신 지원 포함' : '',
+    ].filter(Boolean).join(' · ');
+    const pickRows = TARGET_PICK_SLOTS.map(({ slot, label }) => {
+      const pick = targetPicks[slot];
+      return `<tr><th>${escapeHtml(label)}</th><td>${pick ? `${escapeHtml(pick.name)} ${escapeHtml(pick.dept)} · ${escapeHtml(pick.process)} · 입결 ${pick.grade.toFixed(2)}` : '-'}</td></tr>`;
+    }).join('');
+    const resultRows = filteredResults.slice(0, 200).map((result, index) => `
+      <tr>
+        <td class="center">${index + 1}</td>
+        <td>${escapeHtml(result.name)}</td>
+        <td>${escapeHtml(result.dept)}</td>
+        <td>${escapeHtml(result.process)}</td>
+        <td class="center">${escapeHtml(result.type)}</td>
+        <td class="center">${result.grade.toFixed(2)}</td>
+        <td class="center">${escapeHtml(result.badge)}</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>대학 찾기 결과</title>
+  <style>
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: #f4f6f8; color: #191f28; font-family: ${FONT}; }
+    .toolbar { position: sticky; top: 0; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e5e8eb; text-align: right; }
+    .toolbar button { height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: #1B64DA; color: #fff; font-weight: 800; cursor: pointer; }
+    main { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 16mm; background: #fff; }
+    h1 { margin: 0; font-size: 24px; }
+    .meta { margin-top: 6px; color: #4E5968; font-size: 12px; line-height: 1.55; }
+    section { margin-top: 16px; }
+    h2 { margin: 0 0 8px; font-size: 15px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #d1d6db; padding: 7px 8px; font-size: 11px; line-height: 1.35; vertical-align: middle; word-break: keep-all; }
+    th { background: #eff1f4; font-weight: 800; }
+    .center { text-align: center; }
+    footer { margin-top: 16px; color: #8B95A1; font-size: 10px; }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      main { width: auto; min-height: auto; margin: 0; padding: 0; }
+      @page { size: A4 portrait; margin: 12mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">인쇄 / PDF 저장</button></div>
+  <main>
+    <h1>대학 찾기 결과</h1>
+    <div class="meta">${escapeHtml(studentMeta)}</div>
+    <div class="meta">${escapeHtml(filterMeta)} · 결과 ${filteredResults.length}개</div>
+    <section>
+      <h2>목표 대학 3 Picks</h2>
+      <table><tbody>${pickRows}</tbody></table>
+    </section>
+    <section>
+      <h2>적정 대학 목록</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="center" style="width:9mm">#</th>
+            <th style="width:28mm">대학</th>
+            <th>학과</th>
+            <th style="width:31mm">전형</th>
+            <th class="center" style="width:18mm">구분</th>
+            <th class="center" style="width:17mm">입결</th>
+            <th class="center" style="width:17mm">판정</th>
+          </tr>
+        </thead>
+        <tbody>${resultRows}</tbody>
+      </table>
+    </section>
+    <footer>* 2025학년도 어디가 입결 데이터 기준 참고 자료입니다. 실제 지원 판단은 모집요강과 대학별 산출식을 확인하세요.</footer>
+  </main>
+</body>
+</html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  }, [conversion.grade9, currentStudent, filteredResults, gpa5, searchQuery, searchRange, selectedCategory, selectedUniversity, showAmbitious, targetPicks]);
+
   const badgeCounts = {
     도전: filteredResults.filter(r => r.badge === '도전').length,
     적정: filteredResults.filter(r => r.badge === '적정').length,
@@ -861,7 +966,30 @@ export function Service1Grade({ onOpenService }: { onOpenService?: (serviceId: n
                 9등급 환산 {conversion.grade9.toFixed(3)} 기준 · 총 {filteredResults.length}개
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {filteredResults.length > 0 && (
+                <button
+                  onClick={openUniversityPrintDocument}
+                  style={{
+                    height: 32,
+                    padding: '0 12px',
+                    borderRadius: 8,
+                    border: `1px solid ${T.borderStrong}`,
+                    background: T.surface,
+                    color: T.textMuted,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    fontFamily: FONT,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <Printer size={13} strokeWidth={2.4} />
+                  인쇄 / PDF 저장
+                </button>
+              )}
               {(['도전', '적정', '안정'] as BadgeType[]).map(b => {
                 const cfg = getBadgeStyle(b);
                 return (

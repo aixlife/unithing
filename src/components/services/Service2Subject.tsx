@@ -20,6 +20,17 @@ type ParsedCurriculumPdf = {
 };
 
 type PlanSemester = 1 | 2;
+type MandatoryKey = keyof ParsedCurriculumPdf['mandatory'];
+
+type TempMandatory = Record<MandatoryKey, string>;
+type TempGroup = { id: number; grade: number; semester: string; credits: number; selectCount: number; subjects: string };
+
+type StoredSubjectCurriculum = {
+  version: 1;
+  savedAt: string;
+  mandatory: ParsedCurriculumPdf['mandatory'];
+  groups: ParsedCurriculumPdf['groups'];
+};
 
 type SubjectPlanSelection = {
   grade: number;
@@ -47,6 +58,15 @@ const T = {
 };
 const FONT = "'Pretendard Variable', Pretendard, sans-serif";
 const CURRICULUM_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+const MANDATORY_KEYS: MandatoryKey[] = ['2-1', '2-2', '3-1', '3-2'];
+
+function createEmptyTempMandatory(): TempMandatory {
+  return { '2-1': '', '2-2': '', '3-1': '', '3-2': '' };
+}
+
+function createDefaultTempGroup(): TempGroup {
+  return { id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' };
+}
 
 // ---- Inline SVG Icons ----
 const IconSearch = () => (
@@ -162,6 +182,106 @@ function parseSubjectList(raw: string) {
   return raw.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+function normalizeCurriculumSubjects(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+  if (typeof value === 'string') return parseSubjectList(value);
+  return [];
+}
+
+function normalizeStoredCurriculum(raw: unknown): StoredSubjectCurriculum | null {
+  const data = isRecord(raw) ? raw.subject_curriculum : null;
+  if (!isRecord(data)) return null;
+
+  const mandatoryRaw = isRecord(data.mandatory) ? data.mandatory : {};
+  const mandatory = MANDATORY_KEYS.reduce<ParsedCurriculumPdf['mandatory']>((acc, key) => {
+    acc[key] = normalizeCurriculumSubjects(mandatoryRaw[key]);
+    return acc;
+  }, { '2-1': [], '2-2': [], '3-1': [], '3-2': [] });
+
+  const rawGroups = Array.isArray(data.groups) ? data.groups : [];
+  const groups = rawGroups.flatMap<StoredSubjectCurriculum['groups'][number]>((item) => {
+    if (!isRecord(item)) return [];
+    const subjects = normalizeCurriculumSubjects(item.subjects);
+    if (subjects.length === 0) return [];
+    const grade = Number(item.grade);
+    const credits = Number(item.credits);
+    const selectCount = Number(item.selectCount);
+    return [{
+      grade: grade === 3 ? 3 : 2,
+      semester: typeof item.semester === 'string' && item.semester.trim() ? item.semester.trim() : '1학기',
+      credits: Number.isFinite(credits) && credits > 0 ? credits : 4,
+      selectCount: Number.isFinite(selectCount) && selectCount > 0 ? selectCount : 1,
+      subjects,
+    }];
+  });
+
+  const hasMandatory = Object.values(mandatory).some((subjects) => subjects.length > 0);
+  if (!hasMandatory && groups.length === 0) return null;
+
+  return {
+    version: 1,
+    savedAt: typeof data.savedAt === 'string' ? data.savedAt : '',
+    mandatory,
+    groups,
+  };
+}
+
+function tempMandatoryFromStored(stored: StoredSubjectCurriculum): TempMandatory {
+  return MANDATORY_KEYS.reduce<TempMandatory>((acc, key) => {
+    acc[key] = stored.mandatory[key].join(', ');
+    return acc;
+  }, createEmptyTempMandatory());
+}
+
+function tempGroupsFromStored(stored: StoredSubjectCurriculum): TempGroup[] {
+  if (stored.groups.length === 0) return [createDefaultTempGroup()];
+  return stored.groups.map((group, index) => ({
+    id: Date.now() + index,
+    grade: group.grade === 3 ? 3 : 2,
+    semester: group.semester || '1학기',
+    credits: group.credits || 4,
+    selectCount: group.selectCount || 1,
+    subjects: group.subjects.join(', '),
+  }));
+}
+
+function mandatorySubjectsFromTemp(tempMandatory: TempMandatory): Record<number, SungshinSubject[]> {
+  return {
+    2: mergeSemesterSubjects(tempMandatory['2-1'], tempMandatory['2-2']),
+    3: mergeSemesterSubjects(tempMandatory['3-1'], tempMandatory['3-2']),
+  };
+}
+
+function groupsFromTemp(tempGroups: TempGroup[]): SelectionGroup[] {
+  return tempGroups.map((g, i) => ({
+    id: `선택군${i + 1}`,
+    grade: g.grade,
+    semester: g.semester,
+    selectCount: g.selectCount,
+    credits: g.credits,
+    subjects: parseSubjectList(g.subjects).map(name => ({ name, semesters: semestersFromLabel(g.semester) })),
+    description: '',
+  }));
+}
+
+function storedCurriculumFromTemp(tempMandatory: TempMandatory, tempGroups: TempGroup[]): StoredSubjectCurriculum {
+  return {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    mandatory: MANDATORY_KEYS.reduce<ParsedCurriculumPdf['mandatory']>((acc, key) => {
+      acc[key] = parseSubjectList(tempMandatory[key]);
+      return acc;
+    }, { '2-1': [], '2-2': [], '3-1': [], '3-2': [] }),
+    groups: tempGroups.map((group) => ({
+      grade: group.grade === 3 ? 3 : 2,
+      semester: group.semester || '1학기',
+      credits: group.credits || 4,
+      selectCount: group.selectCount || 1,
+      subjects: parseSubjectList(group.subjects),
+    })).filter((group) => group.subjects.length > 0),
+  };
+}
+
 function semestersFromLabel(label: string): PlanSemester[] {
   const normalized = label.replace(/\s+/g, '');
   if (normalized.includes('1') && normalized.includes('2')) return [1, 2];
@@ -254,10 +374,8 @@ export function Service2Subject() {
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customGroups, setCustomGroups] = useState<SelectionGroup[]>([]);
   const [customMandatory, setCustomMandatory] = useState<Record<number, SungshinSubject[]>>({});
-  const [tempMandatory, setTempMandatory] = useState({ '2-1': '', '2-2': '', '3-1': '', '3-2': '' });
-  const [tempGroups, setTempGroups] = useState<{ id: number; grade: number; semester: string; credits: number; selectCount: number; subjects: string }[]>([
-    { id: 1, grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }
-  ]);
+  const [tempMandatory, setTempMandatory] = useState<TempMandatory>(() => createEmptyTempMandatory());
+  const [tempGroups, setTempGroups] = useState<TempGroup[]>(() => [createDefaultTempGroup()]);
   const [curriculumParseLoading, setCurriculumParseLoading] = useState(false);
   const [curriculumParseMessage, setCurriculumParseMessage] = useState<string | null>(null);
   const [curriculumParseNotes, setCurriculumParseNotes] = useState<string[]>([]);
@@ -302,6 +420,7 @@ export function Service2Subject() {
   }, [currentStudent?.target_dept, studentTargetPick]);
 
   const naesinData = useMemo(() => getNaesinData(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
+  const storedCurriculum = useMemo(() => normalizeStoredCurriculum(currentStudent?.naesin_data), [currentStudent?.naesin_data]);
 
   const subjectPlanSelections = useMemo(() => {
     return getSubjectPlanSelections(currentStudent?.naesin_data);
@@ -335,6 +454,31 @@ export function Service2Subject() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [studentTargetPick, univSearchTerm]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setCurriculumParseMessage(null);
+      setCurriculumParseNotes([]);
+
+      if (!currentStudent || !storedCurriculum) {
+        setIsCustomMode(false);
+        setCustomGroups([]);
+        setCustomMandatory({});
+        setTempMandatory(createEmptyTempMandatory());
+        setTempGroups([createDefaultTempGroup()]);
+        return;
+      }
+
+      const nextTempMandatory = tempMandatoryFromStored(storedCurriculum);
+      const nextTempGroups = tempGroupsFromStored(storedCurriculum);
+      setTempMandatory(nextTempMandatory);
+      setTempGroups(nextTempGroups);
+      setCustomMandatory(mandatorySubjectsFromTemp(nextTempMandatory));
+      setCustomGroups(groupsFromTemp(nextTempGroups));
+      setIsCustomMode(true);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [currentStudent, storedCurriculum]);
 
   const searchResults = useMemo(() => {
     if (!searchTerm.trim()) return [];
@@ -642,24 +786,40 @@ export function Service2Subject() {
     setTimeout(() => printWindow.print(), 250);
   };
 
-  const handleCustomDone = () => {
-    const mandatory: Record<number, SungshinSubject[]> = {
-      2: mergeSemesterSubjects(tempMandatory['2-1'], tempMandatory['2-2']),
-      3: mergeSemesterSubjects(tempMandatory['3-1'], tempMandatory['3-2']),
-    };
-    const groups: SelectionGroup[] = tempGroups.map((g, i) => ({
-      id: `선택군${i + 1}`,
-      grade: g.grade,
-      semester: g.semester,
-      selectCount: g.selectCount,
-      credits: g.credits,
-      subjects: parseSubjectList(g.subjects).map(name => ({ name, semesters: semestersFromLabel(g.semester) })),
-      description: '',
-    }));
+  const handleCustomDone = async () => {
+    const mandatory = mandatorySubjectsFromTemp(tempMandatory);
+    const groups = groupsFromTemp(tempGroups);
     setCustomMandatory(mandatory);
     setCustomGroups(groups);
     setIsCustomMode(true);
     setShowCustomForm(false);
+
+    if (!currentStudent) return;
+    const storedCurriculumValue = storedCurriculumFromTemp(tempMandatory, tempGroups);
+    const nextNaesinData: NaesinData = {
+      ...naesinData,
+      subject_curriculum: storedCurriculumValue,
+    };
+    const updated = await updateStudent(currentStudent.id, { naesin_data: nextNaesinData });
+    if (!updated) {
+      setCurriculumParseMessage('편제표는 현재 화면에 적용됐지만 저장하지 못했습니다. 새로고침 전에 다시 적용해 주세요.');
+    }
+  };
+
+  const resetCustomCurriculum = async () => {
+    setIsCustomMode(false);
+    setCustomGroups([]);
+    setCustomMandatory({});
+    setTempMandatory(createEmptyTempMandatory());
+    setTempGroups([createDefaultTempGroup()]);
+    setShowCustomForm(false);
+
+    if (!currentStudent) return;
+    const nextNaesinData: NaesinData = {
+      ...naesinData,
+      subject_curriculum: null,
+    };
+    await updateStudent(currentStudent.id, { naesin_data: nextNaesinData });
   };
 
   const runPaidAction = async (key: string, setLoading: (value: boolean) => void, action: () => Promise<void>) => {
@@ -2031,7 +2191,7 @@ export function Service2Subject() {
                   ))}
 
                   <button
-                    onClick={() => setTempGroups(prev => [...prev, { id: Date.now(), grade: 2, semester: '1학기', credits: 4, selectCount: 1, subjects: '' }])}
+                    onClick={() => setTempGroups(prev => [...prev, createDefaultTempGroup()])}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: `1.5px dashed ${T.border}`, borderRadius: 10, background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: T.textMuted, fontFamily: FONT }}
                   >
                     <IconPlus />선택군 추가
@@ -2043,14 +2203,14 @@ export function Service2Subject() {
             <div style={{ padding: '14px 20px', borderTop: `1px solid ${T.border}`, background: T.bg, display: 'flex', gap: 8 }}>
               {isCustomMode && (
                 <button
-                  onClick={() => { setIsCustomMode(false); setShowCustomForm(false); }}
+                  onClick={() => void resetCustomCurriculum()}
                   style={{ flex: 1, padding: '12px', background: T.surface, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}
                 >
                   기본 교육과정 복원
                 </button>
               )}
               <button
-                onClick={handleCustomDone}
+                onClick={() => void handleCustomDone()}
                 style={{ flex: 2, padding: '12px', background: T.primary, color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}
               >
                 적용하기

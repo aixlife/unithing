@@ -24,6 +24,7 @@ function StudentSelector() {
   const { students, currentStudent, setCurrentStudent, deleteStudent } = useStudent();
   const [open, setOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +48,13 @@ function StudentSelector() {
     } else {
       setConfirmDeleteId(id);
     }
+  };
+
+  const handleEdit = (student: Student, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen(false);
+    setConfirmDeleteId(null);
+    setEditStudent(student);
   };
 
   return (
@@ -93,6 +101,19 @@ function StudentSelector() {
                   <span style={{ fontSize: 11, color: '#8B95A1', marginLeft: 6, fontWeight: 400 }}>{s.grade}</span>
                 </button>
                 <button
+                  onClick={(e) => handleEdit(s, e)}
+                  title="학생 정보 수정"
+                  style={{
+                    padding: '4px 6px', border: 'none', cursor: 'pointer', background: 'transparent',
+                    color: '#4E5968',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  수정
+                </button>
+                <button
                   onClick={(e) => handleDelete(s.id, e)}
                   title={confirmDeleteId === s.id ? '한 번 더 클릭하면 삭제' : '학생 삭제'}
                   style={{
@@ -119,6 +140,7 @@ function StudentSelector() {
       </div>
 
       {showModal && <StudentModal onClose={() => setShowModal(false)} />}
+      {editStudent && <StudentModal student={editStudent} onClose={() => setEditStudent(null)} />}
     </>
   );
 }
