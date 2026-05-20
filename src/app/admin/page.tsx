@@ -33,6 +33,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<ErrorReport[]>([]);
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
+  const [draftStatuses, setDraftStatuses] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingReportId, setSavingReportId] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export default function AdminPage() {
       const nextReports = (payload.reports ?? []) as ErrorReport[];
       setReports(nextReports);
       setDraftNotes(Object.fromEntries(nextReports.map((report) => [report.id, report.admin_note ?? ''])));
+      setDraftStatuses(Object.fromEntries(nextReports.map((report) => [report.id, report.status])));
       setAuthenticated(true);
     } catch {
       setError('네트워크 문제로 오류 리포트를 불러오지 못했습니다.');
@@ -128,6 +130,7 @@ export default function AdminPage() {
       const updated = payload.report as ErrorReport;
       setReports(prev => prev.map(report => report.id === updated.id ? updated : report));
       setDraftNotes(prev => ({ ...prev, [updated.id]: updated.admin_note ?? '' }));
+      setDraftStatuses(prev => ({ ...prev, [updated.id]: updated.status }));
     } catch {
       setError('네트워크 문제로 처리 상태를 저장하지 못했습니다.');
     } finally {
@@ -287,9 +290,13 @@ export default function AdminPage() {
                 </button>
                 <div style={{ display: 'grid', gridColumn: '1 / -1', gridTemplateColumns: '170px minmax(0, 1fr) auto', gap: 8, alignItems: 'start' }}>
                   <select
-                    value={report.status}
+                    value={draftStatuses[report.id] ?? report.status}
                     disabled={savingReportId === report.id}
-                    onChange={(event) => void updateReport(report.id, { status: event.target.value, adminNote: draftNotes[report.id] ?? '' })}
+                    onChange={(event) => {
+                      const nextStatus = event.target.value;
+                      setDraftStatuses(prev => ({ ...prev, [report.id]: nextStatus }));
+                      void updateReport(report.id, { status: nextStatus, adminNote: draftNotes[report.id] ?? '' });
+                    }}
                     style={{
                       height: 38,
                       borderRadius: 8,
@@ -324,7 +331,10 @@ export default function AdminPage() {
                     }}
                   />
                   <button
-                    onClick={() => void updateReport(report.id, { adminNote: draftNotes[report.id] ?? '', status: report.status })}
+                    onClick={() => void updateReport(report.id, {
+                      adminNote: draftNotes[report.id] ?? '',
+                      status: draftStatuses[report.id] ?? report.status,
+                    })}
                     disabled={savingReportId === report.id}
                     style={{
                       ...toolbarButtonStyle,
