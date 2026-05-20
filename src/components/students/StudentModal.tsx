@@ -2,68 +2,10 @@
 import { useState } from 'react';
 import { useStudent } from '@/contexts/StudentContext';
 import type { Student } from '@/lib/supabase';
+import { isSupportedStudentImportFile, readStudentImportRows } from '@/lib/studentBulkImport';
 
 const GRADES = ['1학년', '2학년', '3학년'];
 const EMPTY_FORM = { name: '', grade: '1학년', school: '', target_dept: '' };
-
-function splitDelimitedLine(line: string, delimiter: string) {
-  const cells: string[] = [];
-  let current = '';
-  let quoted = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    const next = line[i + 1];
-    if (char === '"' && quoted && next === '"') {
-      current += '"';
-      i += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === delimiter && !quoted) {
-      cells.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  cells.push(current.trim());
-  return cells.map(cell => cell.replace(/^"|"$/g, '').trim());
-}
-
-function normalizeGrade(raw: string) {
-  if (raw.includes('3')) return '3학년';
-  if (raw.includes('2')) return '2학년';
-  return '1학년';
-}
-
-function hasHeader(cells: string[]) {
-  const first = cells.join(' ').toLowerCase();
-  return first.includes('학생') || first.includes('name') || first.includes('학교') || first.includes('학년');
-}
-
-async function readDelimitedText(file: File) {
-  const buffer = await file.arrayBuffer();
-  const utf8 = new TextDecoder('utf-8').decode(buffer);
-  if (!utf8.includes('\uFFFD')) return utf8;
-  try {
-    return new TextDecoder('euc-kr').decode(buffer);
-  } catch {
-    return utf8;
-  }
-}
-
-function parseBulkStudents(text: string) {
-  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  if (lines.length === 0) return [];
-  const delimiter = lines.some(line => line.includes('\t')) ? '\t' : ',';
-  const rows = lines.map(line => splitDelimitedLine(line, delimiter));
-  const dataRows = hasHeader(rows[0]) ? rows.slice(1) : rows;
-  return dataRows.map(cells => ({
-    name: cells[0] ?? '',
-    school: cells[1] ?? '',
-    grade: normalizeGrade(cells[2] ?? ''),
-    target_dept: cells[3] ?? '',
-  })).filter(row => row.name.trim());
-}
 
 export function StudentModal({ onClose, student }: { onClose: () => void; student?: Student | null }) {
   const { addStudent, updateStudent } = useStudent();
@@ -93,11 +35,11 @@ export function StudentModal({ onClose, student }: { onClose: () => void; studen
   const importStudents = async (file: File | null) => {
     if (!file || loading || isEdit) return;
     setBulkMessage(null);
-    if (!/\.(csv|tsv|txt)$/i.test(file.name)) {
-      setBulkMessage('CSV 또는 TSV 파일로 저장한 명단만 가져올 수 있습니다.');
+    if (!isSupportedStudentImportFile(file.name)) {
+      setBulkMessage('엑셀(.xlsx), CSV, TSV 파일만 가져올 수 있습니다.');
       return;
     }
-    const rows = parseBulkStudents(await readDelimitedText(file));
+    const rows = await readStudentImportRows(file);
     if (rows.length === 0) {
       setBulkMessage('가져올 학생을 찾지 못했습니다.');
       return;
@@ -171,7 +113,7 @@ export function StudentModal({ onClose, student }: { onClose: () => void; studen
             <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#4E5968', marginBottom: 7 }}>CSV 일괄 등록</label>
             <input
               type="file"
-              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
+              accept=".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values"
               disabled={loading}
               onChange={e => void importStudents(e.target.files?.[0] ?? null)}
               style={{ width: '100%', fontSize: 12, color: '#4E5968' }}

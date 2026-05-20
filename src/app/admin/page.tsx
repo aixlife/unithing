@@ -1,6 +1,6 @@
 'use client';
 
-import { Copy, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Copy, LogOut, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Footer } from '@/components/layout/Footer';
 
@@ -16,16 +16,26 @@ type ErrorReport = {
   user_agent: string | null;
   mail_status: string | null;
   mail_error: string | null;
+  admin_note: string;
   developer_copy: string;
 };
+
+const STATUS_OPTIONS = [
+  { value: 'new', label: '신규' },
+  { value: 'in_progress', label: '처리중' },
+  { value: 'done', label: '완료' },
+  { value: 'deferred', label: '보류' },
+] as const;
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<ErrorReport[]>([]);
+  const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savingReportId, setSavingReportId] = useState<string | null>(null);
 
   const newest = useMemo(() => reports[0], [reports]);
 
@@ -45,7 +55,9 @@ export default function AdminPage() {
         return;
       }
       const payload = await res.json();
-      setReports(payload.reports ?? []);
+      const nextReports = (payload.reports ?? []) as ErrorReport[];
+      setReports(nextReports);
+      setDraftNotes(Object.fromEntries(nextReports.map((report) => [report.id, report.admin_note ?? ''])));
       setAuthenticated(true);
     } catch {
       setError('네트워크 문제로 오류 리포트를 불러오지 못했습니다.');
@@ -95,6 +107,31 @@ export default function AdminPage() {
       setTimeout(() => setCopiedId(null), 1600);
     } catch {
       setError('브라우저 권한 문제로 복사하지 못했습니다. HTTPS 환경에서 다시 시도해 주세요.');
+    }
+  };
+
+  const updateReport = async (id: string, patch: { status?: string; adminNote?: string }) => {
+    setSavingReportId(id);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/error-reports', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        setError(payload?.error ?? '처리 상태를 저장하지 못했습니다.');
+        return;
+      }
+      const payload = await res.json();
+      const updated = payload.report as ErrorReport;
+      setReports(prev => prev.map(report => report.id === updated.id ? updated : report));
+      setDraftNotes(prev => ({ ...prev, [updated.id]: updated.admin_note ?? '' }));
+    } catch {
+      setError('네트워크 문제로 처리 상태를 저장하지 못했습니다.');
+    } finally {
+      setSavingReportId(null);
     }
   };
 
@@ -248,6 +285,57 @@ export default function AdminPage() {
                   <Copy size={16} />
                   {copiedId === report.id ? '복사됨' : '복사'}
                 </button>
+                <div style={{ display: 'grid', gridColumn: '1 / -1', gridTemplateColumns: '170px minmax(0, 1fr) auto', gap: 8, alignItems: 'start' }}>
+                  <select
+                    value={report.status}
+                    disabled={savingReportId === report.id}
+                    onChange={(event) => void updateReport(report.id, { status: event.target.value, adminNote: draftNotes[report.id] ?? '' })}
+                    style={{
+                      height: 38,
+                      borderRadius: 8,
+                      border: '1px solid #D1D6DB',
+                      background: '#F8FAFC',
+                      color: '#191F28',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      padding: '0 10px',
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    value={draftNotes[report.id] ?? ''}
+                    disabled={savingReportId === report.id}
+                    onChange={(event) => setDraftNotes(prev => ({ ...prev, [report.id]: event.target.value }))}
+                    placeholder="처리 메모"
+                    rows={2}
+                    style={{
+                      resize: 'vertical',
+                      minHeight: 38,
+                      borderRadius: 8,
+                      border: '1px solid #D1D6DB',
+                      padding: '8px 10px',
+                      color: '#191F28',
+                      fontSize: 13,
+                      lineHeight: 1.45,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    onClick={() => void updateReport(report.id, { adminNote: draftNotes[report.id] ?? '', status: report.status })}
+                    disabled={savingReportId === report.id}
+                    style={{
+                      ...toolbarButtonStyle,
+                      minWidth: 86,
+                      opacity: savingReportId === report.id ? 0.65 : 1,
+                    }}
+                  >
+                    <Save size={16} />
+                    저장
+                  </button>
+                </div>
               </article>
             ))}
           </section>

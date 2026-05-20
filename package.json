@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "node node_modules/eslint/bin/eslint.js",
+    "test:regressions": "node --experimental-strip-types scripts/test-regressions.mjs",
     "assets:share": "node scripts/generate-share-assets.mjs",
     "data:universities": "node scripts/build-universities-data.mjs",
     "data:subjects": "node scripts/build-recommended-subjects-data.mjs"
@@ -14,6 +15,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.104.0",
+    "fflate": "^0.8.2",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
