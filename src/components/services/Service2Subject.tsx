@@ -7,6 +7,7 @@ import {
 } from '@/data/curriculumData';
 import { UNIVERSITY_TIPS } from '@/data/universityData';
 import { SUBJECT_DETAILS } from '@/data/subjectDetails';
+import { isCsat2028Subject } from '@/data/csat2028';
 import { useStudent } from '@/contexts/StudentContext';
 import { getNaesinData, getPrimaryTargetPick, getUniversityPicks, type NaesinData } from '@/types/student';
 import { PresentationText, stripPresentationMarkdown } from './PresentationText';
@@ -149,13 +150,59 @@ function escapeHtml(value: string) {
 }
 
 function getGradingType(name: string) {
-  const n = normalizeSubjectName(name);
-  const core = ['문학', '독서와 작문', '대수', '미적분Ⅰ', '영어Ⅰ', '영어Ⅱ'].map(normalizeSubjectName);
-  if (core.includes(n)) return '수능 출제/5등급';
+  if (isCsat2028Subject(name)) return '2028 수능/5등급';
   const ach3 = ['운동과 건강', '스포츠 생활1', '스포츠 생활2', '음악 연주와 창작', '미술 창작', '음악 감상과 비평', '미술과 매체', '음악과 미디어', '미술 감상과 비평', '스포츠 문화', '스포츠 문학', '스포츠 과학'].map(normalizeSubjectName);
+  const n = normalizeSubjectName(name);
   if (ach3.includes(n)) return '성취도 3단계';
   if (normalizeSubjectName('기후변화와 환경생태') === n) return '성취도 5단계';
   return '5등급';
+}
+
+function parseSubjectList(raw: string) {
+  return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function semestersFromLabel(label: string): PlanSemester[] {
+  const normalized = label.replace(/\s+/g, '');
+  if (normalized.includes('1') && normalized.includes('2')) return [1, 2];
+  if (normalized.includes('2')) return [2];
+  return [1];
+}
+
+function mergeSemesterSubjects(firstSemester: string, secondSemester: string): SungshinSubject[] {
+  const merged = new Map<string, SungshinSubject>();
+  ([
+    { raw: firstSemester, semester: 1 as PlanSemester },
+    { raw: secondSemester, semester: 2 as PlanSemester },
+  ]).forEach(({ raw, semester }) => {
+    parseSubjectList(raw).forEach((name) => {
+      const key = normalizeSubjectName(name);
+      const existing = merged.get(key);
+      if (existing) {
+        existing.semesters = Array.from(new Set([...existing.semesters, semester])).sort();
+      } else {
+        merged.set(key, { name, semesters: [semester] });
+      }
+    });
+  });
+  return Array.from(merged.values());
+}
+
+function formatCurriculumParseError(status: number, payload: unknown) {
+  const data = isRecord(payload) ? payload : {};
+  const error = typeof data.error === 'string' ? data.error : '';
+  const detail = typeof data.detail === 'string' ? data.detail : '';
+
+  if (status === 401) return '로그인이 만료되었습니다. 다시 로그인한 뒤 편제표 PDF를 불러오세요.';
+  if (status === 413) return 'PDF 용량이 너무 큽니다. 4MB 이하 파일로 줄여 다시 시도하세요.';
+  if (status === 429) return error || '오늘 사용할 수 있는 AI 추출 횟수를 초과했습니다.';
+  if (status === 400) return error || 'PDF 파일 형식을 확인해 주세요.';
+  if (status >= 500) {
+    return detail
+      ? `${error || '교육과정 편제표를 추출하지 못했습니다.'} (${detail.slice(0, 120)})`
+      : error || '교육과정 편제표를 추출하지 못했습니다. 잠시 후 다시 시도하거나 직접 입력해 주세요.';
+  }
+  return error || '교육과정 편제표 추출 실패';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -236,6 +283,16 @@ export function Service2Subject() {
     return FIELD_DATA.flatMap(field => field.majors.map(major => ({ ...major, fieldName: field.name })));
   }, []);
 
+  const displaySchoolName = currentStudent?.school?.trim() || '학교명 미입력';
+
+  const activeGroups = useMemo(() => {
+    return isCustomMode ? customGroups : SUNGSHIN_GROUPS;
+  }, [customGroups, isCustomMode]);
+
+  const activeMandatory = useMemo(() => {
+    return isCustomMode ? customMandatory : MANDATORY_SUBJECTS;
+  }, [customMandatory, isCustomMode]);
+
   const studentTargetPick = useMemo(() => {
     return getPrimaryTargetPick(getUniversityPicks(currentStudent?.naesin_data));
   }, [currentStudent?.naesin_data]);
@@ -254,13 +311,22 @@ export function Service2Subject() {
     return segibuAnalysis?.admissionsReadiness?.criticalWeaknesses.map((item) => `${item.issue}: ${item.recommendation}`) ?? [];
   }, [segibuAnalysis]);
 
+  const subjectManualUniversityQuery = subjectUniversityQuery.trim();
+  const subjectManualMajorQuery = subjectMajorQuery.trim();
+
+  const subjectDefaultUniversity = useMemo(() => {
+    return studentTargetPick?.name || univSearchTerm.trim();
+  }, [studentTargetPick?.name, univSearchTerm]);
+
   const subjectTargetUniversity = useMemo(() => {
-    return subjectUniversityQuery.trim() || studentTargetPick?.name || univSearchTerm.trim();
-  }, [studentTargetPick?.name, subjectUniversityQuery, univSearchTerm]);
+    if (subjectManualUniversityQuery) return subjectManualUniversityQuery;
+    if (subjectManualMajorQuery) return '';
+    return subjectDefaultUniversity;
+  }, [subjectDefaultUniversity, subjectManualMajorQuery, subjectManualUniversityQuery]);
 
   const subjectTargetMajor = useMemo(() => {
-    return subjectMajorQuery.trim() || studentTargetPick?.dept || selectedMajor?.name || studentTargetDept;
-  }, [selectedMajor?.name, studentTargetDept, studentTargetPick?.dept, subjectMajorQuery]);
+    return subjectManualMajorQuery || studentTargetPick?.dept || selectedMajor?.name || studentTargetDept;
+  }, [selectedMajor?.name, studentTargetDept, studentTargetPick?.dept, subjectManualMajorQuery]);
 
   useEffect(() => {
     if (univSearchTerm.trim() || !studentTargetPick?.name) return;
@@ -399,7 +465,7 @@ export function Service2Subject() {
 
   const planData = useMemo(() => {
     if (!selectedMajor) return [];
-    return SUNGSHIN_GROUPS.filter(g => g.grade === planGrade).map(group => {
+    return activeGroups.filter(g => g.grade === planGrade).map(group => {
       const subjectsWithMetadata = group.subjects.map(subject => {
         const nn = normalizeSubjectName(subject.name);
         const area = Object.keys(SUBJECT_AREAS).find(a => SUBJECT_AREAS[a].some(s => normalizeSubjectName(s) === nn)) || '기타';
@@ -419,7 +485,7 @@ export function Service2Subject() {
         groupedSubjects: Object.entries(groupedByArea).map(([area, subjects]) => ({ area, subjects }))
       };
     });
-  }, [selectedMajor, planGrade]);
+  }, [activeGroups, selectedMajor, planGrade]);
 
   const openSubjectPlanDocument = () => {
     if (!selectedMajor) return;
@@ -431,7 +497,7 @@ export function Service2Subject() {
       const cls = type === '진로' ? 'career' : type === '융합' ? 'fusion' : 'default';
       return `<span class="badge ${cls}">${escapeHtml(type)}</span>`;
     };
-    const mandatorySubjects = MANDATORY_SUBJECTS[planGrade] || [];
+    const mandatorySubjects = activeMandatory[planGrade] || [];
     const mandatoryRows = mandatorySubjects.map((subject, idx) => {
       const nn = normalizeSubjectName(subject.name);
       const area = Object.keys(SUBJECT_AREAS).find(a => SUBJECT_AREAS[a].some(s => normalizeSubjectName(s) === nn)) || '공통';
@@ -540,7 +606,7 @@ export function Service2Subject() {
   <main class="sheet">
     <header>
       <h1>${planGrade}학년 수강 신청 계획서</h1>
-      <div class="meta">숭신고등학교 | ${escapeHtml(selectedMajor.name)}</div>
+      <div class="meta">${escapeHtml(displaySchoolName)} | ${escapeHtml(selectedMajor.name)}</div>
     </header>
     <div class="legend">
       <span class="legend-item"><span class="semester-box recommended">✓</span>추천/필수</span>
@@ -576,14 +642,10 @@ export function Service2Subject() {
     setTimeout(() => printWindow.print(), 250);
   };
 
-  const processSemester = (raw: string): SungshinSubject[] => {
-    return raw.split(',').map(s => s.trim()).filter(Boolean).map(name => ({ name, semesters: [1, 2] }));
-  };
-
   const handleCustomDone = () => {
     const mandatory: Record<number, SungshinSubject[]> = {
-      2: [...processSemester(tempMandatory['2-1']), ...processSemester(tempMandatory['2-2'])],
-      3: [...processSemester(tempMandatory['3-1']), ...processSemester(tempMandatory['3-2'])],
+      2: mergeSemesterSubjects(tempMandatory['2-1'], tempMandatory['2-2']),
+      3: mergeSemesterSubjects(tempMandatory['3-1'], tempMandatory['3-2']),
     };
     const groups: SelectionGroup[] = tempGroups.map((g, i) => ({
       id: `선택군${i + 1}`,
@@ -591,7 +653,7 @@ export function Service2Subject() {
       semester: g.semester,
       selectCount: g.selectCount,
       credits: g.credits,
-      subjects: g.subjects.split(',').map(s => s.trim()).filter(Boolean).map(name => ({ name, semesters: [1, 2] })),
+      subjects: parseSubjectList(g.subjects).map(name => ({ name, semesters: semestersFromLabel(g.semester) })),
       description: '',
     }));
     setCustomMandatory(mandatory);
@@ -614,6 +676,11 @@ export function Service2Subject() {
 
   const handleCurriculumPdf = async (file: File | null) => {
     if (!file) return;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setCurriculumParseMessage('PDF 파일만 불러올 수 있습니다. 편제표를 PDF로 저장한 뒤 다시 업로드하세요.');
+      return;
+    }
     if (file.size > CURRICULUM_UPLOAD_LIMIT_BYTES) {
       setCurriculumParseMessage('PDF는 4MB 이하만 추출할 수 있습니다. 용량을 줄인 편제표 PDF로 다시 시도하세요.');
       return;
@@ -627,7 +694,7 @@ export function Service2Subject() {
         const res = await fetch('/api/parse/curriculum-pdf', { method: 'POST', body: form });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error ?? '교육과정 편제표 추출 실패');
+          throw new Error(formatCurriculumParseError(res.status, data));
         }
         const data = await res.json() as ParsedCurriculumPdf;
         setTempMandatory({
@@ -662,7 +729,7 @@ export function Service2Subject() {
       const params = new URLSearchParams();
       if (subjectTargetUniversity) params.set('university', subjectTargetUniversity);
       if (subjectTargetMajor) params.set('major', subjectTargetMajor);
-      params.set('limit', '12');
+      params.set('limit', subjectTargetUniversity ? '12' : '300');
 
       const res = await fetch(`/api/recommended-subjects?${params.toString()}`);
       if (!res.ok) throw new Error('권장과목 검색 실패');
@@ -1175,7 +1242,7 @@ export function Service2Subject() {
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                                     <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: T.primarySoft, color: T.primary, fontWeight: 600 }}>교과: {detail.area}</span>
                                     <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: accentSoft, color: accentColor, fontWeight: 600 }}>유형: {detail.type}</span>
-                                    {detail.suneung === '○' && (
+                                    {isCsat2028Subject(subject) && (
                                       <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: T.accentSoft, color: T.accent, fontWeight: 600 }}>2028 수능 출제</span>
                                     )}
                                     <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: T.bgAlt, color: T.textMuted, fontWeight: 600 }}>등급: {detail.relativeRank}</span>
@@ -1218,7 +1285,7 @@ export function Service2Subject() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 7 }}>
                       <input
                         type="text"
-                        placeholder={subjectTargetUniversity ? `대학: ${subjectTargetUniversity}` : '대학명'}
+                        placeholder={subjectTargetUniversity ? `대학: ${subjectTargetUniversity}` : '전체 대학'}
                         value={subjectUniversityQuery}
                         onChange={(e) => setSubjectUniversityQuery(e.target.value)}
                         style={{
@@ -1270,7 +1337,7 @@ export function Service2Subject() {
                         fontFamily: FONT,
                       }}
                     >
-                      {subjectSearchLoading ? '검색 중...' : '대학 자료 검색'}
+                      {subjectSearchLoading ? '검색 중...' : subjectTargetUniversity ? '대학 자료 검색' : '전체 대학 자료 검색'}
                     </button>
                   </div>
 
@@ -1278,6 +1345,7 @@ export function Service2Subject() {
                     {subjectSourceCount !== null && (
                       <div style={{ fontSize: 11, color: T.textSubtle, lineHeight: 1.45 }}>
                         전체 {subjectSourceCount.toLocaleString()}건 중 {subjectMatchTotal.toLocaleString()}건 매칭
+                        {subjectMatchTotal > subjectMatches.length ? ` · ${subjectMatches.length.toLocaleString()}건 표시` : ''}
                       </div>
                     )}
                     {subjectSearchError && (
@@ -1454,8 +1522,6 @@ export function Service2Subject() {
 
           {/* ===== group view ===== */}
           {viewMode === 'group' && (() => {
-            const activeGroups = isCustomMode ? customGroups : SUNGSHIN_GROUPS;
-            const activeMandatory = isCustomMode ? customMandatory : MANDATORY_SUBJECTS;
             const grades = [...new Set(activeGroups.map(g => g.grade))].sort();
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1626,7 +1692,7 @@ export function Service2Subject() {
                     <span style={{ color: '#fff', display: 'flex' }}><IconCalendar /></span>
                     <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{planGrade}학년 수강 신청 계획서</span>
                   </div>
-                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 600 }}>숭신고등학교 | {selectedMajor.name}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 600 }}>{displaySchoolName} | {selectedMajor.name}</span>
                 </div>
 
                 <div style={{ padding: '16px 14px', overflow: 'visible' }}>
@@ -1644,7 +1710,7 @@ export function Service2Subject() {
                       </tr>
                     </thead>
                     <tbody>
-                      {((MANDATORY_SUBJECTS[planGrade]) || []).map((subject, idx) => {
+                      {((activeMandatory[planGrade]) || []).map((subject, idx) => {
                         const nn = normalizeSubjectName(subject.name);
                         const area = Object.keys(SUBJECT_AREAS).find(a => SUBJECT_AREAS[a].some(s => normalizeSubjectName(s) === nn)) || '공통';
                         const typeKey = Object.keys(SUBJECT_TYPES).find(k => normalizeSubjectName(k) === nn);
@@ -1652,7 +1718,7 @@ export function Service2Subject() {
                         return (
                           <tr key={`m-${subject.name}`} style={{ backgroundColor: T.primarySoft, borderBottom: `1px solid ${T.border}` }}>
                             {idx === 0 && (
-                              <td rowSpan={(MANDATORY_SUBJECTS[planGrade] || []).length}
+                              <td rowSpan={(activeMandatory[planGrade] || []).length}
                                 style={{ padding: '5px', borderRight: `1px solid ${T.border}`, fontWeight: 900, textAlign: 'center', fontSize: '0.6rem', color: T.primary, verticalAlign: 'middle' }}>
                                 필수
                               </td>
@@ -2060,7 +2126,7 @@ export function Service2Subject() {
                       <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: accentSoft, color: accentColor, fontWeight: 700 }}>유형: {type} 선택</span>
                       <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: T.bgAlt, color: T.textMuted, fontWeight: 700 }}>등급: {detail.relativeRank}</span>
                       <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: T.bgAlt, color: T.textMuted, fontWeight: 700 }}>성취도: {detail.absoluteAchievement}</span>
-                      {detail.suneung === '○' && (
+                      {isCsat2028Subject(selectedSubjectName) && (
                         <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: T.accentSoft, color: T.accent, fontWeight: 700 }}>2028 수능 출제</span>
                       )}
                     </div>

@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   const university = searchParams.get('university')?.trim() ?? '';
   const major = searchParams.get('major')?.trim() ?? '';
   const q = searchParams.get('q')?.trim() ?? '';
-  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? 30), 1), 100);
+  const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? 30), 1), 300);
 
   const filtered = RECORDS
     .filter((record) => {

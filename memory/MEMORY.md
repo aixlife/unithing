@@ -10,3 +10,5 @@
 - [Supabase Schema And RLS Baseline](../docs/supabase-schema-rls.md) — 현재 DB 사용 구조와 RLS/서버키 결정 포인트
 - [University Data Baseline](../docs/university-data-baseline.md) — 입결 JSON 생성 기준, 포함/제외 정책, API 동작
 - [Strategy Core Direction](strategy_core_direction.md) — 핵심 방향: 진단이 아닌 목표 대학 기반 사전설계/역설계 서비스
+- [Codex session 2026-05-14](./../../../../Documents/creator-os-vault/sessions/UNITHING/2026-05-14_UNITHING_codex_143550.md) — UNITHING 공개 운영 전 개인정보/비용/오류보고/인쇄-PDF 품질을 정리하고, paid AI 실행 guardrail을 배포 가능한 수준으로 보강했다.
+- [Codex session 2026-05-19](./../../../../Documents/creator-os-vault/sessions/UNITHING/2026-05-19_UNITHING_codex_191930.md) — 학교 Google Workspace OAuth 차단 문제를 계기로 UNITHING에 카카오 로그인과 카카오 연결 해제 웹훅을 추가하고, Vercel 운영 배포에서 invalid_client 원인을 끝까지 해결했다.

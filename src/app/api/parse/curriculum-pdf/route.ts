@@ -14,6 +14,8 @@ type ParsedGroup = {
 const MANDATORY_KEYS = ['2-1', '2-2', '3-1', '3-2'] as const;
 const MAX_CURRICULUM_PDF_BYTES = 4 * 1024 * 1024;
 
+export const runtime = 'nodejs';
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -75,7 +77,10 @@ export async function POST(req: Request) {
   const teacherId = (session?.user as { teacherId?: string } | undefined)?.teacherId;
   if (!teacherId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const formData = await req.formData();
+  const formData = await req.formData().catch(() => null);
+  if (!formData) {
+    return Response.json({ error: 'PDF 업로드 요청을 읽지 못했습니다. 파일 용량과 형식을 확인해 주세요.' }, { status: 400 });
+  }
   const file = formData.get('file') as File | null;
   if (!file) return Response.json({ error: '파일이 없습니다.' }, { status: 400 });
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -123,7 +128,10 @@ export async function POST(req: Request) {
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json' },
+    });
     const result = await model.generateContent({
       contents: [{
         role: 'user',
@@ -133,9 +141,27 @@ export async function POST(req: Request) {
         ],
       }],
     });
-    const parsed = normalizeParsed(JSON.parse(extractJson(result.response.text())));
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(extractJson(result.response.text()));
+    } catch {
+      return Response.json({
+        error: '교육과정 편제표 추출 결과 형식이 올바르지 않습니다.',
+        detail: 'AI 응답을 JSON으로 변환하지 못했습니다. 같은 파일을 자동 재시도하지 말고, 필요하면 직접 입력하거나 파일을 단순화해 다시 업로드하세요.',
+      }, { status: 502 });
+    }
+    const parsed = normalizeParsed(parsedJson);
+    if (parsed.groups.length === 0 && Object.values(parsed.mandatory).every((subjects) => subjects.length === 0)) {
+      return Response.json({
+        error: '편제표에서 과목을 찾지 못했습니다.',
+        detail: '스캔 이미지가 흐리거나 표 구조가 대표 양식과 다를 수 있습니다. 과목명을 직접 입력하거나 더 선명한 PDF로 다시 시도하세요.',
+      }, { status: 422 });
+    }
     return Response.json(parsed);
   } catch (error) {
-    return Response.json({ error: '교육과정 편제표를 추출하지 못했습니다.', detail: String(error) }, { status: 500 });
+    return Response.json({
+      error: '교육과정 편제표를 추출하지 못했습니다.',
+      detail: error instanceof Error ? error.message : String(error),
+    }, { status: 500 });
   }
 }
